@@ -6,9 +6,4 @@
     <Nullable>enable</Nullable>
   </PropertyGroup>
 
-  <ItemGroup>
-    <PackageReference Include="Downloader" Version="3.3.4" />
-    <PackageReference Include="LuaCSharp" Version="0.5.3" />
-  </ItemGroup>
-
 </Project>
