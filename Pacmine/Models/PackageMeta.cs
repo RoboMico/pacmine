@@ -23,4 +23,8 @@ public class PackageMeta
     public Dictionary<string, VersionRange> Depends { get; set; } = [];
 
     public Dictionary<string, VersionRange> Conflicts { get; set; } = [];
+
+    public Dictionary<string, VersionRange> Replaces { get; set; } = [];
+
+    public Dictionary<string, string> Recommends { get; set; } = [];
 }

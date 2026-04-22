@@ -17,7 +17,8 @@ public class Program
 {
     public static async Task<int> Main(string[] args)
     {
-        var builder = await PackageBuilder.FromScriptAsync(File.ReadAllText(args[0]));
+        var builder = await PackageBuilder.CreateAsync(File.ReadAllText(args[0]));
+        await builder.ConfigureWorkingDirector(Environment.CurrentDirectory).BuildAsync();
         return 0;
     }
 }

@@ -2,24 +2,32 @@ namespace Pacmine.Models;
 
 public class VersionIdentifier : IComparable<VersionIdentifier>, IEquatable<VersionIdentifier>
 {
+    private string _raw = "";
+
     public VersionIdentifier(string version)
     {
-        Segments = version.Split(['.', '-']).ToList();
-    }
-    public VersionIdentifier(List<string> segments)
-    {
-        Segments = segments;
+        RawString = version;
     }
 
-    List<string> Segments { get; set; } = [];
+    public string RawString
+    {
+        get => _raw;
+        set
+        {
+            _raw = value;
+            Segments = value.Split(['.', '-']);
+        }
+    }
+
+    public string[] Segments { get; private set; } = [];
 
     public int CompareTo(VersionIdentifier? other)
     {
         if (other is null)
             return 1;
-        if (Segments.Count != other.Segments.Count)
-            return Segments.Count.CompareTo(other.Segments.Count);
-        for (int i = 0; i < Segments.Count; i++)
+        if (Segments.Length != other.Segments.Length)
+            return Segments.Length.CompareTo(other.Segments.Length);
+        for (int i = 0; i < Segments.Length; i++)
         {
             var segA = Segments[i];
             var segB = other.Segments[i];
@@ -33,7 +41,7 @@ public class VersionIdentifier : IComparable<VersionIdentifier>, IEquatable<Vers
             else if (segA != segB)
                 return segA.CompareTo(segB);
         }
-        return 0;
+        return RawString.CompareTo(other.RawString);
     }
 
     public static bool operator ==(VersionIdentifier? a, VersionIdentifier? b)
@@ -71,14 +79,7 @@ public class VersionIdentifier : IComparable<VersionIdentifier>, IEquatable<Vers
         if (obj is not VersionIdentifier)
             return false;
         var other = (VersionIdentifier)obj;
-        if (Segments.Count != other.Segments.Count)
-            return false;
-        for (int i = 0; i < Segments.Count; i++)
-        {
-            if (Segments[i] != other.Segments[i])
-                return false;
-        }
-        return true;
+        return RawString == other.RawString;
     }
 
     public bool Equals(VersionIdentifier? other)
@@ -88,11 +89,11 @@ public class VersionIdentifier : IComparable<VersionIdentifier>, IEquatable<Vers
 
     public override int GetHashCode()
     {
-        return Segments.GetHashCode();
+        return RawString.GetHashCode();
     }
 
     public override string ToString()
     {
-        return string.Join('.', Segments);
+        return RawString;
     }
 }
