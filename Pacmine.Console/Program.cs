@@ -1,5 +1,4 @@
 using Pacmine;
-using Pacmine.PackageCraft;
 
 namespace Pacmine.Console;
 
@@ -17,8 +16,6 @@ public class Program
 {
     public static async Task<int> Main(string[] args)
     {
-        var builder = await PackageBuilder.CreateAsync(File.ReadAllText(args[0]));
-        await builder.ConfigureWorkingDirector(Environment.CurrentDirectory).BuildAsync();
         return 0;
     }
 }

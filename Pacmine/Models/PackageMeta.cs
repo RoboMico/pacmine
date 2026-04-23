@@ -27,4 +27,9 @@ public class PackageMeta
     public Dictionary<string, VersionRange> Replaces { get; set; } = [];
 
     public Dictionary<string, string> Recommends { get; set; } = [];
+
+    public string GetFullVersionString()
+    {
+        return $"{((Epoch != 0) ? $"{Epoch}:" : "")}{Version}-{Release}";
+    }
 }

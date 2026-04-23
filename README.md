@@ -7,11 +7,35 @@ Revolutionary assets package manager for Minecraft. Inspired by [pacman](https:/
 - **Universal assets management.** Packages provide not only mods, but also resource packs, config flies, shader packs, or literally any files in your game directory.
 - **Do what a package manager does.** Supports dependencies and conflicts check. Package and file records registered in local database make upgrading and uninstalling an ease.
 - **Create packages in a snap.** You can write all the build information of a package into a single Lua script (namely PackageCraft) and Pacmine will build the package automatically for you, just like how [PKGBUILD](https://wiki.archlinux.org/title/PKGBUILD) works.
+- **High priority on security.** Any overwriting or deleting operation on files are handled with great caution. Build scripts are executed in a pure-C#-implemented and restricted-by-default Lua state environment with standard library totally disabled.
 - **Community-friendly distribution mode.** You do not have to acquire the source code of a mod or distribute mod jar file to maintain a Pacmine package - simply share the Lua script and let everyone build their own packages.
 
-## Acknowledgement
+## Architecture
 
-- [Arch Linux](https://archlinux.org/) and pacman: inspiration of the design
-- Dependencies NuGet packages of the project:
-  - [Lua-CSharp](https://github.com/nuskey8/Lua-CSharp)
-  - [Downloader](https://github.com/bezzad/Downloader)
+Pacmine as a C# library is modular by design. You can include only the features you want without the heavy dependacies.
+
+| Package Name           | Description                                                                                                       | Depends On                                                                 |
+| ---------------------- | ----------------------------------------------------------------------------------------------------------------- | -------------------------------------------------------------------------- |
+| Pacmine                | Base library of core models and concepts.                                                                         | None                                                                       |
+| Pacmine.PackageCraft   | Utilities to build Pacmine packages.                                                                              | Pacmine, [Downloader][downloader], [LuaCSharp][luacsharp]                  |
+| Pacmine.Database (WIP) | Utilities to manipulate local package database, also provides file operations to install packages on filesystems. | Pacmine                                                                    |
+| Pacmine.Remote (WIP)   | Utilities to fetch packages and query information from remote repositories.                                       | Pacmine, [Downloader][downloader]                                          |
+| Pacmine.Console        | A CLI application to download, install, manage and build Pacmine packages.                                        | All `Pacmine` prefixed libraries, [System.CommandLine][system.commandline] |
+
+All the modules share the same version number. Every new release bumps the version of all modules, even if one had not received any update since the last release.
+
+## Documentation
+
+soon
+
+## Integrating Guides
+
+soon
+
+## 3rd Party Ports
+
+soon
+
+[downloader]: https://github.com/bezzad/Downloader
+[luacsharp]: https://github.com/nuskey8/Lua-CSharp
+[system.commandline]: https://www.nuget.org/packages/System.CommandLine
