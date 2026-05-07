@@ -3,11 +3,11 @@ using Lua;
 namespace Pacmine.PackageCraft.LuaLibrary;
 
 [LuaObject]
-public partial class FileLuaLibrary
+public partial class FilesysLuaLibrary
 {
     private PackageBuilder builderContext;
 
-    public FileLuaLibrary(PackageBuilder context)
+    public FilesysLuaLibrary(PackageBuilder context)
     {
         builderContext = context;
     }
@@ -32,7 +32,7 @@ public partial class FileLuaLibrary
             || !dest.StartsWith(builderContext.SourceDirectory.FullName)
             || !dest.StartsWith(builderContext.PackageDirectory.FullName))
             {
-                throw new Exception("Disallowed file operation");
+                throw new Exception("Disallowed file system operation");
             }
         }
         File.Move(source, dest);
@@ -52,7 +52,7 @@ public partial class FileLuaLibrary
             || !dest.StartsWith(builderContext.SourceDirectory.FullName)
             || !dest.StartsWith(builderContext.PackageDirectory.FullName))
             {
-                throw new Exception("Disallowed file operation");
+                throw new Exception("Disallowed file system operation");
             }
         }
         File.Copy(source, dest);
@@ -67,7 +67,7 @@ public partial class FileLuaLibrary
             if (!file.StartsWith(builderContext.SourceDirectory.FullName)
             || !file.StartsWith(builderContext.PackageDirectory.FullName))
             {
-                throw new Exception("Disallowed file operation");
+                throw new Exception("Disallowed file system operation");
             }
         }
         File.Delete(file);
@@ -82,7 +82,7 @@ public partial class FileLuaLibrary
             if (!path.StartsWith(builderContext.SourceDirectory.FullName)
             || !path.StartsWith(builderContext.PackageDirectory.FullName))
             {
-                throw new Exception("Disallowed file operation");
+                throw new Exception("Disallowed file system operation");
             }
         }
         Directory.CreateDirectory(path);

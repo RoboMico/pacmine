@@ -13,6 +13,8 @@ public class PackageCraftRecipe
 
     public List<string> SourceChecksums { get; set; } = [];
 
+    public List<string> VariableFiles { get; set; } = [];
+
     public LuaFunction? Prepare { get; set; }
 
     public LuaFunction? GetVersion { get; set; }

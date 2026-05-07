@@ -108,7 +108,7 @@ public class PackageBuilder
         }
         SourceDirectory.Create();
         PackageDirectory.Create();
-        luaState.Environment["file"] = new FileLuaLibrary(this);
+        luaState.Environment["filesys"] = new FilesysLuaLibrary(this);
     }
 
     public async Task FetchSourceAsync(int index)

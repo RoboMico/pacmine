@@ -16,38 +16,39 @@ recipe.meta = {
     indium = "1"
   },
   depends = {
-    minecraft = ">=26.1 <26.2",
-    fabricloader = ">=0.16.0"
+    fabricloader = ">=0.16.0",
+    minecraft = ">=26.1 <26.2"
   },
   conflicts = {
-    embeddium = "*",
-    optifabric = "*",
-    canvas = "*",
-    vulkanmod = "*",
-    optimalaim = "<2.0.0",
-    sodium_blendingregistry = "*",
-    ocrenderfix_sodium = "*",
+    audio_engine_tweaks = "<1.2.12",
+    betterend = "<=21.0.11",
     betterfpsdist = "<=4.5",
     bobby = "<5.2.4",
+    canvas = "*",
     chunksfadein = "<2.0.2",
     cull_less_leaves = "<=1.3.0",
     cullleaves = "<=3.4.0",
     custom_hud = "<3.4.2",
+    embeddium = "*",
+    enchanteds_sodium_options = "<1.0.1",
+    fabric_api = "<0.145.1",
     farsight = "<=4.3",
     iceberg = "<1.2.7",
     iris = "<=1.10.8",
+    moreculling = "<1.6.0-beta.2",
     movingelevators = "<=1.4.7",
     notenoughcrashes = "<4.4.8",
     noxesium = "<2.3.3",
+    ocrenderfix_sodium = "*",
+    optifabric = "*",
+    optimalaim = "<2.0.0",
     reeses_sodium_options = "<2.0.2",
-    fabric_api = "<0.145.1",
-    sodium_extra = "<0.8.0",
-    audio_engine_tweaks = "<1.2.12",
-    sspb = "<6.0.0",
-    moreculling = "<1.6.0-beta.2",
     simply_no_shading = "<7.6.2",
-    betterend = "<=21.0.11",
-    enchanteds_sodium_options = "<1.0.1"
+    sodium = "*",
+    sodium_blendingregistry = "*",
+    sodium_extra = "<0.8.0",
+    sspb = "<6.0.0",
+    vulkanmod = "*"
   },
   replaces = {},
   recommends = {}
@@ -61,8 +62,13 @@ recipe.source_checksums = {
   "sha256:25ad95ba787bd7ff2a0deaf20a8f4642b91e23489d0e10933693d9963a6022f2"
 }
 
+recipe.variable_files = {
+  "config/sodium-options.json",
+  "config/sodium-mixins.properties"
+}
+
 function recipe.package()
-  file.move("${SRCDIR}/sodium-fabric-0.8.9+mc26.1.1.jar", "${PKGDIR}/")
+  filesys.move("${SRCDIR}/sodium-fabric-0.8.9+mc26.1.1.jar", "${PKGDIR}/")
 end
 
 return recipe
