@@ -18,6 +18,8 @@ public class PackageMeta
 
     public int Epoch { get; set; } = 0;
 
+    public List<string> Groups { get; set; } = [];
+
     public Dictionary<string, VersionIdentifier> Provides { get; set; } = [];
 
     public Dictionary<string, VersionRange> Depends { get; set; } = [];
@@ -31,5 +33,14 @@ public class PackageMeta
     public string GetFullVersionString()
     {
         return $"{((Epoch != 0) ? $"{Epoch}:" : "")}{Version}-{Release}";
+    }
+
+    public bool IsNewerThan(PackageMeta other)
+    {
+        if (Epoch != other.Epoch)
+            return Epoch > other.Epoch;
+        if (Version != other.Version)
+            return Version > other.Version;
+        return Release > other.Release;
     }
 }

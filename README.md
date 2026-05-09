@@ -14,13 +14,13 @@ Revolutionary assets package manager for Minecraft. Inspired by [pacman](https:/
 
 Pacmine as a C# library is modular by design. You can include only the features you want without the heavy dependacies.
 
-| Package Name           | Description                                                                                                       | Depends On                                                                 |
-| ---------------------- | ----------------------------------------------------------------------------------------------------------------- | -------------------------------------------------------------------------- |
-| Pacmine                | Base library of core models and concepts.                                                                         | None                                                                       |
-| Pacmine.PackageCraft   | Utilities to build Pacmine packages.                                                                              | Pacmine, [Downloader][downloader], [LuaCSharp][luacsharp]                  |
-| Pacmine.Database (WIP) | Utilities to manipulate local package database, also provides file operations to install packages on filesystems. | Pacmine                                                                    |
-| Pacmine.Remote (WIP)   | Utilities to fetch packages and query information from remote repositories.                                       | Pacmine, [Downloader][downloader]                                          |
-| Pacmine.Console        | A CLI application to download, install, manage and build Pacmine packages.                                        | All `Pacmine` prefixed libraries, [System.CommandLine][system.commandline] |
+| Package Name           | Description                                                                                                               | Depends On                                                                 |
+| ---------------------- | ------------------------------------------------------------------------------------------------------------------------- | -------------------------------------------------------------------------- |
+| Pacmine                | Base library of core models and concepts.                                                                                 | None                                                                       |
+| Pacmine.PackageCraft   | Utilities to build Pacmine packages.                                                                                      | Pacmine, [Downloader][downloader], [LuaCSharp][luacsharp]                  |
+| Pacmine.Environment    | Utilities to manage package registry in game instances, also provides file operations to install packages on filesystems. | Pacmine                                                                    |
+| Pacmine.Database (WIP) | Utilities to manage local package database.                                                                               | Pacmine                                                                    |
+| Pacmine.Console        | A CLI application to download, install, manage and build Pacmine packages.                                                | All `Pacmine` prefixed libraries, [System.CommandLine][system.commandline] |
 
 All the modules share the same version number. Every new release bumps the version of all modules, even if one had not received any update since the last release.
 

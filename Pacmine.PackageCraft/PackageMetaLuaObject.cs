@@ -62,6 +62,28 @@ public partial class PackageMetaLuaObject : PackageMeta
         set => Epoch = value;
     }
 
+    [LuaMember("groups")]
+    public LuaTable LuaI_Groups
+    {
+        get
+        {
+            LuaTable table = [];
+            for (int i = 0; i < Groups.Count; i++)
+            {
+                table[i + 1] = Groups[i].ToString();
+            }
+            return table;
+        }
+        set
+        {
+            Groups = [];
+            foreach (var item in value)
+            {
+                Groups.Add(item.Key.Read<string>());
+            }
+        }
+    }
+
     [LuaMember("provides")]
     public LuaTable LuaI_Provides
     {
@@ -184,6 +206,7 @@ public partial class PackageMetaLuaObject : PackageMeta
             Version = new(table["version"].Read<string>()),
             LuaI_Release = table["release"].Read<int>(),
             LuaI_Epoch = table["epoch"].Read<int>(),
+            LuaI_Groups = table["groups"].Read<LuaTable>(),
             LuaI_Provides = table["provides"].Read<LuaTable>(),
             LuaI_Depends = table["depends"].Read<LuaTable>(),
             LuaI_Conflicts = table["conflicts"].Read<LuaTable>(),
@@ -204,6 +227,7 @@ public partial class PackageMetaLuaObject : PackageMeta
             ["version"] = Version.ToString(),
             ["release"] = Release,
             ["epoch"] = Epoch,
+            ["groups"] = LuaI_Groups,
             ["provides"] = LuaI_Provides,
             ["depends"] = LuaI_Depends,
             ["conflicts"] = LuaI_Conflicts,
