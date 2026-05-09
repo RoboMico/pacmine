@@ -98,8 +98,16 @@ Press a key to continue:
 
 */
 
+/// <summary>
+/// Entry point for the Pacmine console application.
+/// </summary>
 public class Program
 {
+    /// <summary>
+    /// The main entry point for the Pacmine CLI tool.
+    /// </summary>
+    /// <param name="args">Command-line arguments.</param>
+    /// <returns>A task that represents the asynchronous operation, returning the exit code.</returns>
     public static async Task<int> Main(string[] args)
     {
         return 0;

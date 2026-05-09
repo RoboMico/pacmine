@@ -3,9 +3,16 @@ using Pacmine.Models;
 
 namespace Pacmine.PackageCraft;
 
+/// <summary>
+/// A Lua-compatible wrapper around <see cref="PackageMeta"/> that exposes package metadata
+/// properties with Lua attribute mappings for use in PackageCraft build scripts.
+/// </summary>
 [LuaObject]
 public partial class PackageMetaLuaObject : PackageMeta
 {
+    /// <summary>
+    /// Gets or sets the package name, mapped to the Lua field <c>name</c>.
+    /// </summary>
     [LuaMember("name")]
     public string LuaI_Name
     {
@@ -13,6 +20,9 @@ public partial class PackageMetaLuaObject : PackageMeta
         set => Name = value;
     }
 
+    /// <summary>
+    /// Gets or sets the package description, mapped to the Lua field <c>description</c>.
+    /// </summary>
     [LuaMember("description")]
     public string LuaI_Description
     {
@@ -20,6 +30,9 @@ public partial class PackageMetaLuaObject : PackageMeta
         set => Description = value;
     }
 
+    /// <summary>
+    /// Gets or sets the upstream URL, mapped to the Lua field <c>upstream_url</c>.
+    /// </summary>
     [LuaMember("upstream_url")]
     public string LuaI_UpstreamUrl
     {
@@ -27,6 +40,9 @@ public partial class PackageMetaLuaObject : PackageMeta
         set => UpstreamUrl = value;
     }
 
+    /// <summary>
+    /// Gets or sets the package category, mapped to the Lua field <c>category</c>.
+    /// </summary>
     [LuaMember("category")]
     public string LuaI_Category
     {
@@ -34,6 +50,9 @@ public partial class PackageMetaLuaObject : PackageMeta
         set => Category = value;
     }
 
+    /// <summary>
+    /// Gets or sets the license identifier, mapped to the Lua field <c>license</c>.
+    /// </summary>
     [LuaMember("license")]
     public string LuaI_License
     {
@@ -41,6 +60,9 @@ public partial class PackageMetaLuaObject : PackageMeta
         set => License = value;
     }
 
+    /// <summary>
+    /// Gets or sets the version as a string, mapped to the Lua field <c>version</c>.
+    /// </summary>
     [LuaMember("version")]
     public string LuaI_Version
     {
@@ -48,6 +70,9 @@ public partial class PackageMetaLuaObject : PackageMeta
         set => Version = new(value);
     }
 
+    /// <summary>
+    /// Gets or sets the release number, mapped to the Lua field <c>release</c>.
+    /// </summary>
     [LuaMember("release")]
     public int LuaI_Release
     {
@@ -55,6 +80,9 @@ public partial class PackageMetaLuaObject : PackageMeta
         set => Release = value;
     }
 
+    /// <summary>
+    /// Gets or sets the epoch number, mapped to the Lua field <c>epoch</c>.
+    /// </summary>
     [LuaMember("epoch")]
     public int LuaI_Epoch
     {
@@ -62,6 +90,9 @@ public partial class PackageMetaLuaObject : PackageMeta
         set => Epoch = value;
     }
 
+    /// <summary>
+    /// Gets or sets the list of groups as a Lua table, mapped to the Lua field <c>groups</c>.
+    /// </summary>
     [LuaMember("groups")]
     public LuaTable LuaI_Groups
     {
@@ -84,6 +115,9 @@ public partial class PackageMetaLuaObject : PackageMeta
         }
     }
 
+    /// <summary>
+    /// Gets or sets the provides dictionary as a Lua table, mapped to the Lua field <c>provides</c>.
+    /// </summary>
     [LuaMember("provides")]
     public LuaTable LuaI_Provides
     {
@@ -106,6 +140,9 @@ public partial class PackageMetaLuaObject : PackageMeta
         }
     }
 
+    /// <summary>
+    /// Gets or sets the dependencies dictionary as a Lua table, mapped to the Lua field <c>depends</c>.
+    /// </summary>
     [LuaMember("depends")]
     public LuaTable LuaI_Depends
     {
@@ -128,6 +165,9 @@ public partial class PackageMetaLuaObject : PackageMeta
         }
     }
 
+    /// <summary>
+    /// Gets or sets the conflicts dictionary as a Lua table, mapped to the Lua field <c>conflicts</c>.
+    /// </summary>
     [LuaMember("conflicts")]
     public LuaTable LuaI_Conflicts
     {
@@ -150,6 +190,9 @@ public partial class PackageMetaLuaObject : PackageMeta
         }
     }
 
+    /// <summary>
+    /// Gets or sets the replaces dictionary as a Lua table, mapped to the Lua field <c>replaces</c>.
+    /// </summary>
     [LuaMember("replaces")]
     public LuaTable LuaI_Replaces
     {
@@ -172,6 +215,9 @@ public partial class PackageMetaLuaObject : PackageMeta
         }
     }
 
+    /// <summary>
+    /// Gets or sets the recommendations dictionary as a Lua table, mapped to the Lua field <c>recommends</c>.
+    /// </summary>
     [LuaMember("recommends")]
     public LuaTable LuaI_Recommends
     {
@@ -194,6 +240,11 @@ public partial class PackageMetaLuaObject : PackageMeta
         }
     }
 
+    /// <summary>
+    /// Creates a new <see cref="PackageMetaLuaObject"/> from a Lua table by reading each known field.
+    /// </summary>
+    /// <param name="table">The Lua table containing package metadata.</param>
+    /// <returns>A populated <see cref="PackageMetaLuaObject"/> instance.</returns>
     public static PackageMetaLuaObject FromLuaTable(LuaTable table)
     {
         return new()
@@ -215,6 +266,10 @@ public partial class PackageMetaLuaObject : PackageMeta
         };
     }
 
+    /// <summary>
+    /// Converts this instance to a Lua table with all package metadata fields.
+    /// </summary>
+    /// <returns>A Lua table representing the package metadata.</returns>
     public LuaTable ToLuaTable()
     {
         return new()
