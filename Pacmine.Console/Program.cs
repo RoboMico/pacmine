@@ -1,4 +1,5 @@
-using Pacmine;
+using System.CommandLine;
+using Pacmine.Console.Commands;
 
 namespace Pacmine.Console;
 
@@ -110,6 +111,17 @@ public class Program
     /// <returns>A task that represents the asynchronous operation, returning the exit code.</returns>
     public static async Task<int> Main(string[] args)
     {
-        return 0;
+        var rootCommand = new RootCommand("Pacmine - Minecraft Package Manager");
+
+        rootCommand.AddCommand(InitCommand.Create());
+        rootCommand.AddCommand(DestroyCommand.Create());
+        rootCommand.AddCommand(InstallCommand.Create());
+        rootCommand.AddCommand(BuildCommand.Create());
+        rootCommand.AddCommand(UninstallCommand.Create());
+        rootCommand.AddCommand(ListCommand.Create());
+        rootCommand.AddCommand(EnvCommand.Create());
+        rootCommand.AddCommand(RepairCommand.Create());
+
+        return await rootCommand.InvokeAsync(args);
     }
 }
