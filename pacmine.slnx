@@ -1,5 +1,5 @@
 <Solution>
-  <Project Path="Pacmine/Pacmine.csproj" />
+  <Project Path="Pacmine.Core/Pacmine.Core.csproj" />
   <Project Path="Pacmine.PackageCraft/Pacmine.PackageCraft.csproj" />
   <Project Path="Pacmine.Environment/Pacmine.Environment.csproj" />
   <Project Path="Pacmine.Console/Pacmine.Console.csproj" />

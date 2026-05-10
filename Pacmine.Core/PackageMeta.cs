@@ -1,4 +1,4 @@
-namespace Pacmine.Models;
+namespace Pacmine.Core;
 
 /// <summary>
 /// Represents metadata for a package, including its identity, relationships, and version information.

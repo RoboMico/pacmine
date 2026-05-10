@@ -7,7 +7,7 @@
   </PropertyGroup>
 
   <ItemGroup>
-    <ProjectReference Include="..\Pacmine\Pacmine.csproj" />
+    <ProjectReference Include="..\Pacmine.Core\Pacmine.Core.csproj" />
   </ItemGroup>
 
 </Project>

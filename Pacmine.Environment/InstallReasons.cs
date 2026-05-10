@@ -1,4 +1,4 @@
-namespace Pacmine.Database;
+namespace Pacmine.Environment;
 
 /// <summary>
 /// Specifies the reason why a package was installed.

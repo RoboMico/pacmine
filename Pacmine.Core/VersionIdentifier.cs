@@ -1,4 +1,4 @@
-namespace Pacmine.Models;
+namespace Pacmine.Core;
 
 /// <summary>
 /// Represents a version identifier that supports comparison and equality operations.

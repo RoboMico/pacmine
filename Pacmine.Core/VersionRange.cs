@@ -1,6 +1,6 @@
 using System.Text;
 
-namespace Pacmine.Models;
+namespace Pacmine.Core;
 
 /// <summary>
 /// Represents a version range expression.

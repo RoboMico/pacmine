@@ -1,5 +1,5 @@
 using Lua;
-using Pacmine.Models;
+using Pacmine.Core;
 
 namespace Pacmine.PackageCraft;
 

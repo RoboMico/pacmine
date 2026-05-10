@@ -1,6 +1,6 @@
-using Pacmine.Models;
+using Pacmine.Core;
 
-namespace Pacmine.Database;
+namespace Pacmine.Environment;
 
 /// <summary>
 /// Represents the registry entry for an installed package, including its metadata,

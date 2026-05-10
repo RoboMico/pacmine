@@ -16,10 +16,10 @@ Pacmine as a C# library is modular by design. You can include only the features 
 
 | Package Name           | Description                                                                                                               | Depends On                                                                 |
 | ---------------------- | ------------------------------------------------------------------------------------------------------------------------- | -------------------------------------------------------------------------- |
-| Pacmine                | Base library of core models and concepts.                                                                                 | None                                                                       |
-| Pacmine.PackageCraft   | Utilities to build Pacmine packages.                                                                                      | Pacmine, [Downloader][downloader], [LuaCSharp][luacsharp]                  |
-| Pacmine.Environment    | Utilities to manage package registry in game instances, also provides file operations to install packages on filesystems. | Pacmine                                                                    |
-| Pacmine.Database (WIP) | Utilities to manage local package database.                                                                               | Pacmine                                                                    |
+| Pacmine.Core           | Base library of core models and concepts.                                                                                 | None                                                                       |
+| Pacmine.PackageCraft   | Utilities to build Pacmine packages.                                                                                      | Pacmine.Core, [Downloader][downloader], [LuaCSharp][luacsharp]             |
+| Pacmine.Environment    | Utilities to manage package registry in game instances, also provides file operations to install packages on filesystems. | Pacmine.Core                                                               |
+| Pacmine.Database (WIP) | Utilities to manage local package database.                                                                               | Pacmine.Core                                                               |
 | Pacmine.Console        | A CLI application to download, install, manage and build Pacmine packages.                                                | All `Pacmine` prefixed libraries, [System.CommandLine][system.commandline] |
 
 All the modules share the same version number. Every new release bumps the version of all modules, even if one had not received any update since the last release.
