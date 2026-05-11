@@ -1,4 +1,23 @@
+using System.Text.Json;
+
 namespace Pacmine.Environment;
+
+/*
+an environment folder structure would like this:
+
+26.1.2-fabric
+├─ <other game files>
+└─ .pacmine
+   ├─ lock
+   ├─ packlist
+   ├─ managed_files.json
+   └─ registry
+      ├─ a   (first layer, sort the packages by the initial letter of package name)
+      ├─ b
+      ├─ ...
+      └─ s
+         └─ sodium-mc26.1-fabric.json
+*/
 
 /// <summary>
 /// Manages a Pacmine environment, which represents a game instance directory
@@ -6,6 +25,9 @@ namespace Pacmine.Environment;
 /// </summary>
 public class PacmineEnvironment : IDisposable
 {
+    private List<string> _packList = [];
+    private List<ManagedFileRecord> _mngFiles = [];
+
     /// <summary>
     /// The name of the special folder used to store environment data.
     /// </summary>
@@ -25,6 +47,11 @@ public class PacmineEnvironment : IDisposable
     /// The name of the file storing the list of installed packages.
     /// </summary>
     public const string PACKLIST_FILE_NAME = "packlist";
+
+    /// <summary>
+    /// The name of the file storing the list of managed files.
+    /// </summary>
+    public const string MANAGED_FILE_LIST_FILE_NAME = "managed_files.json";
 
     private PacmineEnvironment(string path)
     {
@@ -59,6 +86,11 @@ public class PacmineEnvironment : IDisposable
     /// Gets the package list file information for this environment.
     /// </summary>
     public FileInfo PackListFile { get; private set; }
+
+    /// <summary>
+    /// Gets the file information of <see cref="MANAGED_FILE_LIST_FILE_NAME"/> in this environment.
+    /// </summary>
+    public FileInfo ManagedFileListFile { get; private set; }
 
     private void Lock()
     {
@@ -109,6 +141,11 @@ public class PacmineEnvironment : IDisposable
         }
         PacmineEnvironment env = new(directory);
         env.Lock();
+        env._packList = File.ReadAllLines(env.PackListFile.FullName).ToList();
+        env._mngFiles = JsonSerializer.Deserialize<List<ManagedFileRecord>>(
+            File.ReadAllText(env.ManagedFileListFile.FullName)) ?? throw new Exception("Invalid managed files list");
+        // TODO: auto rebuild the cache and generate managed_files.json if it is corrupted/missing,
+        // just throw the exception for now
         return env;
     }
 
@@ -125,18 +162,37 @@ public class PacmineEnvironment : IDisposable
         {
             throw new Exception("Environment already created");
         }
+
         Directory.CreateDirectory(databasePath);
         File.Create(System.IO.Path.Combine(databasePath, PACKLIST_FILE_NAME));
+
         return Access(directory);
     }
 
     /// <summary>
-    /// Gets or sets the list of installed package names from the package list file.
+    /// Gets the list of installed package names.
     /// </summary>
-    public string[] PackageList
+    public List<string> PackageList
     {
-        get => File.ReadAllLines(PackListFile.FullName);
-        set => File.WriteAllLines(PackListFile.FullName, value);
+        get => _packList;
+        set
+        {
+            _packList = value;
+            File.WriteAllLines(PackListFile.FullName, _packList);
+        }
+    }
+
+    /// <summary>
+    /// Gets the list of managed files in this environment.
+    /// </summary>
+    public List<ManagedFileRecord> ManagedFiles
+    {
+        get => _mngFiles;
+        set
+        {
+            _mngFiles = value;
+            File.WriteAllText(JsonSerializer.Serialize(_mngFiles), ManagedFileListFile.FullName);
+        }
     }
 
     /// <summary>
