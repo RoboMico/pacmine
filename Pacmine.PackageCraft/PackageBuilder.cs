@@ -49,7 +49,8 @@ public class PackageBuilder
     /// <summary>
     /// Gets the recipe that defines the build configuration.
     /// </summary>
-    public PackageCraftRecipe Recipe { get; private set; }
+    public PackageCraftRecipe Recipe { get; private set; } = null!;
+    // it is guaranteeed that Recipe is not null after CreateAsync() is called
 
     /// <summary>
     /// Gets whether the Lua file system library (<c>filesys</c>) is available. Defaults to <c>true</c>.

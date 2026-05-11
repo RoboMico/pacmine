@@ -11,6 +11,8 @@ namespace Pacmine.PackageCraft.LuaLibrary;
 public partial class FilesysLuaLibrary
 {
     private PackageBuilder builderContext;
+    private DirectoryInfo sourceDirectory;
+    private DirectoryInfo packageDirectory;
 
     /// <summary>
     /// Initializes a new instance of the <see cref="FilesysLuaLibrary"/> class.
@@ -19,12 +21,14 @@ public partial class FilesysLuaLibrary
     public FilesysLuaLibrary(PackageBuilder context)
     {
         builderContext = context;
+        sourceDirectory = context.SourceDirectory!;
+        packageDirectory = context.PackageDirectory!;
     }
 
     private string ReplacePathVariables(string path)
     {
-        return path.Replace("${SRCDIR}", builderContext.SourceDirectory.FullName)
-                   .Replace("${PKGDIR}", builderContext.PackageDirectory.FullName);
+        return path.Replace("${SRCDIR}", sourceDirectory.FullName)
+                   .Replace("${PKGDIR}", packageDirectory.FullName);
     }
 
     /// <summary>
@@ -42,10 +46,10 @@ public partial class FilesysLuaLibrary
         // or builderContext.PackageDirectory
         if (!builderContext.AllowArbitaryFileOperation)
         {
-            if (!source.StartsWith(builderContext.SourceDirectory.FullName)
-            || !source.StartsWith(builderContext.PackageDirectory.FullName)
-            || !dest.StartsWith(builderContext.SourceDirectory.FullName)
-            || !dest.StartsWith(builderContext.PackageDirectory.FullName))
+            if (!source.StartsWith(sourceDirectory.FullName)
+            || !source.StartsWith(packageDirectory.FullName)
+            || !dest.StartsWith(sourceDirectory.FullName)
+            || !dest.StartsWith(packageDirectory.FullName))
             {
                 throw new Exception("Disallowed file system operation");
             }
@@ -68,10 +72,10 @@ public partial class FilesysLuaLibrary
         // or builderContext.PackageDirectory
         if (!builderContext.AllowArbitaryFileOperation)
         {
-            if (!source.StartsWith(builderContext.SourceDirectory.FullName)
-            || !source.StartsWith(builderContext.PackageDirectory.FullName)
-            || !dest.StartsWith(builderContext.SourceDirectory.FullName)
-            || !dest.StartsWith(builderContext.PackageDirectory.FullName))
+            if (!source.StartsWith(sourceDirectory.FullName)
+            || !source.StartsWith(packageDirectory.FullName)
+            || !dest.StartsWith(sourceDirectory.FullName)
+            || !dest.StartsWith(packageDirectory.FullName))
             {
                 throw new Exception("Disallowed file system operation");
             }
@@ -90,8 +94,8 @@ public partial class FilesysLuaLibrary
         file = Path.GetFullPath(ReplacePathVariables(file));
         if (!builderContext.AllowArbitaryFileOperation)
         {
-            if (!file.StartsWith(builderContext.SourceDirectory.FullName)
-            || !file.StartsWith(builderContext.PackageDirectory.FullName))
+            if (!file.StartsWith(sourceDirectory.FullName)
+            || !file.StartsWith(packageDirectory.FullName))
             {
                 throw new Exception("Disallowed file system operation");
             }
@@ -110,8 +114,8 @@ public partial class FilesysLuaLibrary
         path = Path.GetFullPath(ReplacePathVariables(path));
         if (!builderContext.AllowArbitaryFileOperation)
         {
-            if (!path.StartsWith(builderContext.SourceDirectory.FullName)
-            || !path.StartsWith(builderContext.PackageDirectory.FullName))
+            if (!path.StartsWith(sourceDirectory.FullName)
+            || !path.StartsWith(packageDirectory.FullName))
             {
                 throw new Exception("Disallowed file system operation");
             }
