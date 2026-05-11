@@ -17,7 +17,7 @@ recipe.meta = {
   },
   depends = {
     fabricloader = ">=0.16.0",
-    minecraft = ">=26.1 <26.2"
+    minecraft = "~26.1"
   },
   conflicts = {
     audio_engine_tweaks = "<1.2.12",
