@@ -16,7 +16,7 @@ Pacmine 作为一个 C# 库，采用模块化设计。你可以只包含你需�
 
 | 包名                   | 描述                                                                             | 依赖项                                                          |
 | ---------------------- | -------------------------------------------------------------------------------- | --------------------------------------------------------------- |
-| Pacmine.Core           | 核心模型与概念的基础库。                                                         | 无                                                              |
+| Pacmine.Core           | 核心模型与概念的基础库。                                                         | [semver][semver]                                                |
 | Pacmine.PackageCraft   | 用于构建 Pacmine 包的工具。                                                      | Pacmine.Core, [Downloader][downloader], [LuaCSharp][luacsharp]  |
 | Pacmine.Environment    | 用于管理游戏实例中组建包注册表的工具，同时提供在文件系统上安装包的文件操作功能。 | Pacmine.Core                                                    |
 | Pacmine.Database (WIP) | 用于管理本地包数据库的工具。                                                     | Pacmine.Core                                                    |
@@ -38,4 +38,5 @@ soon
 
 [downloader]: https://github.com/bezzad/Downloader
 [luacsharp]: https://github.com/nuskey8/Lua-CSharp
+[semver]: https://github.com/adamreeve/semver.net
 [system.commandline]: https://www.nuget.org/packages/System.CommandLine

@@ -16,7 +16,7 @@ Pacmine as a C# library is modular by design. You can include only the features 
 
 | Package Name           | Description                                                                                                               | Depends On                                                                 |
 | ---------------------- | ------------------------------------------------------------------------------------------------------------------------- | -------------------------------------------------------------------------- |
-| Pacmine.Core           | Base library of core models and concepts.                                                                                 | None                                                                       |
+| Pacmine.Core           | Base library of core models and concepts.                                                                                 | [semver][semver]                                                           |
 | Pacmine.PackageCraft   | Utilities to build Pacmine packages.                                                                                      | Pacmine.Core, [Downloader][downloader], [LuaCSharp][luacsharp]             |
 | Pacmine.Environment    | Utilities to manage package registry in game instances, also provides file operations to install packages on filesystems. | Pacmine.Core                                                               |
 | Pacmine.Database (WIP) | Utilities to manage local package database.                                                                               | Pacmine.Core                                                               |
@@ -38,4 +38,5 @@ soon
 
 [downloader]: https://github.com/bezzad/Downloader
 [luacsharp]: https://github.com/nuskey8/Lua-CSharp
+[semver]: https://github.com/adamreeve/semver.net
 [system.commandline]: https://www.nuget.org/packages/System.CommandLine
