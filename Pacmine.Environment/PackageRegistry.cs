@@ -20,7 +20,6 @@ public class PackageRegistry
 
     /// <summary>
     /// Gets or sets the SHA-256 checksums of the package files, in the same order as <see cref="FileList"/>.
-    /// "VAR" string represents variable files that are skipped during checksum validation.
     /// </summary>
     public string[] FileSHA256Sums { get; set; } = [];
 

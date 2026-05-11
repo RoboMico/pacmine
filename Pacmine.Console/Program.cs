@@ -19,7 +19,6 @@ pacmine build <pathToLua> - Build a package with PackageCraft
     --no-clean, -n - Skip cleaning up
 pacmine uninstall <pkgNameList> - Uninstall a package
     Alias: remove
-    --purge, -p - Do not keep the "variable files"(usually config files) owned by the package
 pacmine list - List all installed packages
     --verbose, -v - Show more info about each package
     (TODO: need an idea for powerful advanced filtering and sorting functions)
@@ -31,7 +30,7 @@ such as minecraft installation, fabric/forge loader, etc.)
     pacmine env set <name> <version> - Add a env package(if a new one) or change its version
     pacmine env unset <name> - Remove a env package
 pacmine repair [dir] - Repair all the packages
-(check all files that are owned by a package; skip "variable files"; if a file is missing or failed the checksum, reinstall the package)
+(check all files that are owned by a package; if a file is missing or failed the checksum, reinstall the package)
     [dir] - The directory of the root, defaults to shell's pwd
     --print, -p - Do not deploy the repair, print the check report only
 pacmine help - Show help

@@ -81,31 +81,6 @@ public partial class PackageCraftRecipeLuaObject : PackageCraftRecipe
     }
 
     /// <summary>
-    /// Gets or sets the variable files list as a Lua table (1-indexed array), mapped to the Lua field <c>variable_files</c>.
-    /// </summary>
-    [LuaMember("variable_files")]
-    public LuaTable LuaI_VariableFiles
-    {
-        get
-        {
-            LuaTable table = [];
-            for (int i = 0; i < VariableFiles.Count; i++)
-            {
-                table[i + 1] = VariableFiles[i];
-            }
-            return table;
-        }
-        set
-        {
-            VariableFiles = [];
-            foreach (var pair in value)
-            {
-                VariableFiles.Add(pair.Value.Read<string>());
-            }
-        }
-    }
-
-    /// <summary>
     /// Gets or sets the prepare Lua function, mapped to the Lua field <c>prepare</c>. Returns <c>Nil</c> when not set.
     /// </summary>
     [LuaMember("prepare")]
@@ -169,7 +144,6 @@ public partial class PackageCraftRecipeLuaObject : PackageCraftRecipe
             Meta = PackageMetaLuaObject.FromLuaTable(table["meta"].Read<LuaTable>()),
             LuaI_Sources = table["sources"].Read<LuaTable>(),
             LuaI_SourceChecksums = table["source_checksums"].Read<LuaTable>(),
-            LuaI_VariableFiles = table["variable_files"].Read<LuaTable>(),
             LuaI_Prepare = table["prepare"],
             LuaI_GetVersion = table["get_version"],
             LuaI_Build = table["build"],
@@ -190,7 +164,6 @@ public partial class PackageCraftRecipeLuaObject : PackageCraftRecipe
             ["meta"] = ((PackageMetaLuaObject)Meta).ToLuaTable(),
             ["sources"] = LuaI_Sources,
             ["source_checksums"] = LuaI_SourceChecksums,
-            ["variable_files"] = LuaI_VariableFiles,
             ["prepare"] = LuaI_Prepare,
             ["get_version"] = LuaI_GetVersion,
             ["build"] = LuaI_Build,

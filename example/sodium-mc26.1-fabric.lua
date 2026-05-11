@@ -62,11 +62,6 @@ recipe.source_checksums = {
   "sha256:25ad95ba787bd7ff2a0deaf20a8f4642b91e23489d0e10933693d9963a6022f2"
 }
 
-recipe.variable_files = {
-  "config/sodium-options.json",
-  "config/sodium-mixins.properties"
-}
-
 function recipe.package()
   filesys.move("${SRCDIR}/sodium-fabric-0.8.9+mc26.1.1.jar", "${PKGDIR}/")
 end

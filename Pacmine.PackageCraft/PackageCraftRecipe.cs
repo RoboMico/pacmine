@@ -31,11 +31,6 @@ public class PackageCraftRecipe
     public List<string> SourceChecksums { get; set; } = [];
 
     /// <summary>
-    /// Gets or sets the list of variable (config) files that are preserved during uninstall without <c>--purge</c>.
-    /// </summary>
-    public List<string> VariableFiles { get; set; } = [];
-
-    /// <summary>
     /// Gets or sets the Lua function to invoke during the prepare phase. Can be <c>null</c>.
     /// </summary>
     public LuaFunction? Prepare { get; set; }
