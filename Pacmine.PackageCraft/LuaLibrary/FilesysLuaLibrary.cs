@@ -31,6 +31,12 @@ public partial class FilesysLuaLibrary
                    .Replace("${PKGDIR}", packageDirectory.FullName);
     }
 
+    private bool IsPathAllowed(string path)
+    {
+        return path.StartsWith(sourceDirectory.FullName)
+               || path.StartsWith(packageDirectory.FullName);
+    }
+
     /// <summary>
     /// Moves a file from the source path to the destination path. Supports <c>${SRCDIR}</c> and <c>${PKGDIR}</c> variables.
     /// </summary>
@@ -46,10 +52,7 @@ public partial class FilesysLuaLibrary
         // or builderContext.PackageDirectory
         if (!builderContext.AllowArbitaryFileOperation)
         {
-            if (!source.StartsWith(sourceDirectory.FullName)
-            || !source.StartsWith(packageDirectory.FullName)
-            || !dest.StartsWith(sourceDirectory.FullName)
-            || !dest.StartsWith(packageDirectory.FullName))
+            if (!IsPathAllowed(source) || !IsPathAllowed(dest))
             {
                 throw new Exception("Disallowed file system operation");
             }
@@ -72,10 +75,7 @@ public partial class FilesysLuaLibrary
         // or builderContext.PackageDirectory
         if (!builderContext.AllowArbitaryFileOperation)
         {
-            if (!source.StartsWith(sourceDirectory.FullName)
-            || !source.StartsWith(packageDirectory.FullName)
-            || !dest.StartsWith(sourceDirectory.FullName)
-            || !dest.StartsWith(packageDirectory.FullName))
+            if (!IsPathAllowed(source) || !IsPathAllowed(dest))
             {
                 throw new Exception("Disallowed file system operation");
             }
@@ -94,8 +94,7 @@ public partial class FilesysLuaLibrary
         file = Path.GetFullPath(ReplacePathVariables(file));
         if (!builderContext.AllowArbitaryFileOperation)
         {
-            if (!file.StartsWith(sourceDirectory.FullName)
-            || !file.StartsWith(packageDirectory.FullName))
+            if (!IsPathAllowed(file))
             {
                 throw new Exception("Disallowed file system operation");
             }
@@ -114,8 +113,7 @@ public partial class FilesysLuaLibrary
         path = Path.GetFullPath(ReplacePathVariables(path));
         if (!builderContext.AllowArbitaryFileOperation)
         {
-            if (!path.StartsWith(sourceDirectory.FullName)
-            || !path.StartsWith(packageDirectory.FullName))
+            if (!IsPathAllowed(path))
             {
                 throw new Exception("Disallowed file system operation");
             }

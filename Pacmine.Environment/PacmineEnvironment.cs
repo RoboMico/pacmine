@@ -1,23 +1,7 @@
+using System.Text;
 using System.Text.Json;
 
 namespace Pacmine.Environment;
-
-/*
-an environment folder structure would like this:
-
-26.1.2-fabric
-├─ <other game files>
-└─ .pacmine
-   ├─ lock
-   ├─ packlist
-   ├─ managed_files.json
-   └─ registry
-      ├─ a   (first layer, sort the packages by the initial letter of package name)
-      ├─ b
-      ├─ ...
-      └─ s
-         └─ sodium-mc26.1-fabric.json
-*/
 
 /// <summary>
 /// Manages a Pacmine environment, which represents a game instance directory
@@ -27,6 +11,7 @@ public class PacmineEnvironment : IDisposable
 {
     private List<string> _packList = [];
     private List<ManagedFileRecord> _mngFiles = [];
+    private FileStream? _lockStream;
 
     /// <summary>
     /// The name of the special folder used to store environment data.
@@ -60,6 +45,7 @@ public class PacmineEnvironment : IDisposable
         RegistryFolder = new(System.IO.Path.Combine(SpecialFolder.FullName, REGISTRY_FOLDER_NAME));
         LockFile = new(System.IO.Path.Combine(SpecialFolder.FullName, LOCKFILE_NAME));
         PackListFile = new(System.IO.Path.Combine(SpecialFolder.FullName, PACKLIST_FILE_NAME));
+        ManagedFileListFile = new(System.IO.Path.Combine(SpecialFolder.FullName, MANAGED_FILE_LIST_FILE_NAME));
     }
 
     /// <summary>
@@ -94,14 +80,58 @@ public class PacmineEnvironment : IDisposable
 
     private void Lock()
     {
-        int pid = System.Environment.ProcessId;
-        LockFile.Create();
-        File.WriteAllText(LockFile.FullName, $"{pid}");
+        try
+        {
+            _lockStream = new FileStream(
+                LockFile.FullName,
+                FileMode.OpenOrCreate,
+                FileAccess.ReadWrite,
+                FileShare.Read);
+            _lockStream.SetLength(0);
+            var pidBytes = Encoding.UTF8.GetBytes(System.Environment.ProcessId.ToString());
+            _lockStream.Write(pidBytes);
+            _lockStream.Flush();
+        }
+        catch (IOException ex)
+        {
+            var pid = TryReadLockPid();
+            var extra = pid >= 0 ? $" by process {pid}" : "";
+            throw new IOException($"Environment is locked{extra}.", ex);
+        }
+    }
+
+    private int TryReadLockPid()
+    {
+        try
+        {
+            using var fs = new FileStream(
+                LockFile.FullName,
+                FileMode.Open,
+                FileAccess.Read,
+                FileShare.ReadWrite);
+            using var reader = new StreamReader(fs, Encoding.UTF8);
+            var text = reader.ReadToEnd();
+            return int.TryParse(text.Trim(), out var pid) ? pid : -1;
+        }
+        catch
+        {
+            return -1;
+        }
     }
 
     private void Unlock()
     {
-        if (LockFile.Exists) LockFile.Delete();
+        _lockStream?.Dispose();
+        _lockStream = null;
+        try
+        {
+            if (LockFile.Exists)
+                LockFile.Delete();
+        }
+        catch
+        {
+            // best-effort cleanup
+        }
     }
 
     /// <summary>
@@ -111,12 +141,22 @@ public class PacmineEnvironment : IDisposable
     /// <returns>The process ID of the locker, or -1 if the environment is not locked.</returns>
     public static int GetLockerPid(string directory)
     {
-        FileInfo lockFile = new(System.IO.Path.Combine(directory, SPECIAL_FOLDER_NAME, LOCKFILE_NAME));
-        if (lockFile.Exists)
+        var lockFile = new FileInfo(System.IO.Path.Combine(directory, SPECIAL_FOLDER_NAME, LOCKFILE_NAME));
+        if (!lockFile.Exists)
+            return -1;
+
+        try
         {
-            return int.Parse(File.ReadAllText(lockFile.FullName));
+            using var fs = new FileStream(
+                lockFile.FullName,
+                FileMode.Open,
+                FileAccess.Read,
+                FileShare.ReadWrite);
+            using var reader = new StreamReader(fs, Encoding.UTF8);
+            var text = reader.ReadToEnd();
+            return int.TryParse(text.Trim(), out var pid) ? pid : -1;
         }
-        else
+        catch
         {
             return -1;
         }
@@ -131,21 +171,16 @@ public class PacmineEnvironment : IDisposable
     public static PacmineEnvironment Access(string directory)
     {
         if (!Directory.Exists(System.IO.Path.Combine(directory, SPECIAL_FOLDER_NAME)))
-        {
             throw new Exception("Invalid environment directory");
-        }
-        int lockerPid = GetLockerPid(directory);
-        if (lockerPid > 0)
-        {
-            throw new Exception($"Another process {lockerPid} has locked the directory");
-        }
+
         PacmineEnvironment env = new(directory);
         env.Lock();
+
         env._packList = File.ReadAllLines(env.PackListFile.FullName).ToList();
         env._mngFiles = JsonSerializer.Deserialize<List<ManagedFileRecord>>(
-            File.ReadAllText(env.ManagedFileListFile.FullName)) ?? throw new Exception("Invalid managed files list");
-        // TODO: auto rebuild the cache and generate managed_files.json if it is corrupted/missing,
-        // just throw the exception for now
+            File.ReadAllText(env.ManagedFileListFile.FullName))
+            ?? throw new Exception("Invalid managed files list");
+
         return env;
     }
 
@@ -159,12 +194,11 @@ public class PacmineEnvironment : IDisposable
     {
         string databasePath = System.IO.Path.Combine(directory, SPECIAL_FOLDER_NAME);
         if (Directory.Exists(databasePath))
-        {
             throw new Exception("Environment already created");
-        }
 
         Directory.CreateDirectory(databasePath);
-        File.Create(System.IO.Path.Combine(databasePath, PACKLIST_FILE_NAME));
+        File.Create(System.IO.Path.Combine(databasePath, PACKLIST_FILE_NAME)).Dispose();
+        File.Create(System.IO.Path.Combine(databasePath, MANAGED_FILE_LIST_FILE_NAME)).Dispose();
 
         return Access(directory);
     }
@@ -191,7 +225,7 @@ public class PacmineEnvironment : IDisposable
         set
         {
             _mngFiles = value;
-            File.WriteAllText(JsonSerializer.Serialize(_mngFiles), ManagedFileListFile.FullName);
+            File.WriteAllText(ManagedFileListFile.FullName, JsonSerializer.Serialize(_mngFiles));
         }
     }
 
@@ -200,7 +234,8 @@ public class PacmineEnvironment : IDisposable
     /// </summary>
     public void Destroy()
     {
-        SpecialFolder.Delete();
+        Unlock();
+        SpecialFolder.Delete(true);
     }
 
     /// <summary>

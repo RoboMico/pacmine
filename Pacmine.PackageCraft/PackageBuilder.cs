@@ -353,7 +353,7 @@ public class PackageBuilder
     /// <returns>A task representing the asynchronous operation.</returns>
     public async Task CleanUpAsync()
     {
-        SourceDirectory?.Delete();
-        PackageDirectory?.Delete();
+        SourceDirectory?.Delete(true);
+        PackageDirectory?.Delete(true);
     }
 }

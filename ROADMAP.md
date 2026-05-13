@@ -15,23 +15,10 @@ complete. All 8 CLI commands have argument plumbing wired via
 Eliminate known bugs in already-implemented code. The build pipeline must be
 rock-solid before building anything on top of it.
 
-- [ ] **FilesysLuaLibrary sandbox logic** — `FilesysLuaLibrary.cs:48,73,95`:
-  `||` between two `!StartsWith` checks is always `true`; change to `&&` so
-  valid paths inside `SRCDIR` or `PKGDIR` are allowed through.
-
-- [ ] **Recursive directory deletion** — `PackageBuilder.cs:356` (`CleanUpAsync`)
-  and `PacmineEnvironment.cs:147` (`Destroy`) call `DirectoryInfo.Delete()`
-  without `true`, which throws on non-empty directories.
-
-- [ ] **File handle leak** — `PacmineEnvironment.cs:129`: `File.Create()` return
-  value is never disposed. Replace with `File.WriteAllText(packListPath, "")` or
-  wrap in `using`.
-
-- [ ] **Cross-process lock safety** — `PacmineEnvironment.cs`: the current
-  PID-file approach has a TOCTOU race between `GetLockerPid()` and `Lock()`.
-  Replace with `FileStream` opened with `FileShare.None` for a real OS-level
-  exclusive lock.
-
+- [x] **FilesysLuaLibrary sandbox logic**
+- [x] **Recursive directory deletion**
+- [x] **File handle leak**
+- [x] **Cross-process lock safety**
 - [ ] **Git source support in PackageBuilder** — `PackageBuilder.cs:224`: the
   `git://` branch silently does nothing, leaving `trackedSources[index]` null.
   Either implement clone + checkout, or throw `NotSupportedException` with a
