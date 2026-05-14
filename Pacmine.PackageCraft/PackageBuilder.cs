@@ -224,6 +224,8 @@ public class PackageBuilder
         }
         SourceDirectory.Create();
         PackageDirectory.Create();
+        GlobalFunctions gf = new(this);
+        gf.RegisterFunctions(luaState);
         luaState.Environment["filesys"] = new FilesysLuaLibrary(this);
     }
 
