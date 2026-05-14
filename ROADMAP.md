@@ -19,11 +19,7 @@ rock-solid before building anything on top of it.
 - [x] **Recursive directory deletion**
 - [x] **File handle leak**
 - [x] **Cross-process lock safety**
-- [ ] **Git source support in PackageBuilder** — `PackageBuilder.cs:224`: the
-  `git://` branch silently does nothing, leaving `trackedSources[index]` null.
-  Either implement clone + checkout, or throw `NotSupportedException` with a
-  clear message.
-
+- [x] **Git source support in PackageBuilder**
 ---
 
 ## M2 — Registry Persistence

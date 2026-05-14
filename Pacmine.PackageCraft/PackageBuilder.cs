@@ -1,3 +1,4 @@
+using System.Diagnostics;
 using System.IO.Compression;
 using System.Security.Cryptography;
 using Downloader;
@@ -13,7 +14,7 @@ namespace Pacmine.PackageCraft;
 public class PackageBuilder
 {
     private LuaState luaState;
-    private FileInfo?[] trackedSources;
+    private FileSystemInfo?[] trackedSources;
     private static readonly DownloadConfiguration defaultDlConfig = new()
     {
         ChunkCount = 8,
@@ -29,22 +30,22 @@ public class PackageBuilder
     /// <summary>
     /// Gets the working directory for the build.
     /// </summary>
-    public DirectoryInfo? WorkingDirectory { get; private set; }
+    public DirectoryInfo? WorkingDirectory { get; private set; } = null;
 
     /// <summary>
     /// Gets the source directory where downloaded or copied sources are placed.
     /// </summary>
-    public DirectoryInfo? SourceDirectory { get; private set; }
+    public DirectoryInfo? SourceDirectory { get; private set; } = null;
 
     /// <summary>
     /// Gets the package staging directory where built files are assembled.
     /// </summary>
-    public DirectoryInfo? PackageDirectory { get; private set; }
+    public DirectoryInfo? PackageDirectory { get; private set; } = null;
 
     /// <summary>
     /// Gets the output directory where the final package archive is written.
     /// </summary>
-    public DirectoryInfo? OutputDirectory { get; private set; }
+    public DirectoryInfo? OutputDirectory { get; private set; } = null;
 
     /// <summary>
     /// Gets the recipe that defines the build configuration.
@@ -73,6 +74,16 @@ public class PackageBuilder
     public bool AllowShellExceution { get; private set; } = false;
 
     /// <summary>
+    /// Gets the command to execute for Git operations. <c>null</c> if Git is not available.
+    /// </summary>
+    public string? GitCommand { get; private set; } = null;
+
+    /// <summary>
+    /// Gets the Downloader configuration used for downloading sources.
+    /// </summary>
+    public DownloadConfiguration DownloadConfig { get; private set; } = defaultDlConfig;
+
+    /// <summary>
     /// Creates a new <see cref="PackageBuilder"/> instance by executing the specified Lua script
     /// and parsing the resulting recipe table.
     /// </summary>
@@ -83,7 +94,7 @@ public class PackageBuilder
         PackageBuilder builder = new();
         var result = (await builder.luaState.DoStringAsync(script)).First().Read<LuaTable>();
         builder.Recipe = PackageCraftRecipeLuaObject.FromLuaTable(result);
-        builder.trackedSources = new FileInfo?[builder.Recipe.Sources.Count];
+        builder.trackedSources = new FileSystemInfo?[builder.Recipe.Sources.Count];
         return builder;
     }
 
@@ -179,6 +190,28 @@ public class PackageBuilder
     }
 
     /// <summary>
+    /// Configures the command to use when invoking Git.
+    /// </summary>
+    /// <param name="command">The Git command to use. Set <c>null</c> to disable Git.</param>
+    /// <returns>This <see cref="PackageBuilder"/> instance for chaining.</returns>
+    public PackageBuilder ConfigureGit(string? command)
+    {
+        GitCommand = command;
+        return this;
+    }
+
+    /// <summary>
+    /// Configures the Downloader service with the specified configuration.
+    /// </summary>
+    /// <param name="config">The <see cref="DownloadConfiguration"/> to use.</param>
+    /// <returns>This <see cref="PackageBuilder"/> instance for chaining.</returns>
+    public PackageBuilder ConfigureDownloadConfig(DownloadConfiguration config)
+    {
+        DownloadConfig = config;
+        return this;
+    }
+
+    /// <summary>
     /// Initializes the build environment by creating necessary directories
     /// and injecting the enabled Lua library into the Lua state.
     /// </summary>
@@ -195,7 +228,7 @@ public class PackageBuilder
     }
 
     /// <summary>
-    /// Fetches a source by index. Supports HTTP/HTTPS downloads, and local file copies.
+    /// Fetches a source by index. Supports HTTP/HTTPS downloads, local file copies, and Git repository clones.
     /// </summary>
     /// <param name="index">The index of the source in the recipe's <see cref="PackageCraftRecipe.Sources"/> list.</param>
     /// <returns>A task representing the asynchronous operation.</returns>
@@ -221,7 +254,91 @@ public class PackageBuilder
         }
         else if (src.StartsWith("git://"))
         {
-            // TODO: git support
+            // Guards
+            if (GitCommand == null)
+            {
+                throw new Exception("Git is disabled for this builder.");
+            }
+
+            // Parse the git:// URL
+            string url = src["git://".Length..];
+
+            string? branch = null;
+            string? refSpec = null;
+            int hashIndex = url.IndexOf('#');
+            int dollarIndex = url.IndexOf('$');
+
+            if (hashIndex >= 0 && dollarIndex >= 0)
+            {
+                throw new Exception("URL contains both a branch and a ref spec");
+            }
+
+            if (hashIndex >= 0)
+            {
+                branch = url[(hashIndex + 1)..];
+                url = url[..hashIndex];
+            }
+            if (dollarIndex >= 0)
+            {
+                refSpec = url[(dollarIndex + 1)..];
+                url = url[..dollarIndex];
+            }
+
+            // Extract repo name from URL
+            string repoName = Path.GetFileNameWithoutExtension(url);
+            if (string.IsNullOrEmpty(repoName))
+            {
+                // Fallback: use last path segment
+                repoName = url.TrimEnd('/').Split('/')[^1];
+            }
+
+            string clonePath = Path.Combine(SourceDirectory.FullName, repoName);
+
+            // Build arguments
+            var argsBuilder = new List<string>
+            {
+                "clone",
+                url,
+                clonePath,
+                "--depth",
+                "1"
+            };
+
+            if (branch != null)
+            {
+                argsBuilder.Add("--branch");
+                argsBuilder.Add(branch);
+            }
+
+            if (refSpec != null)
+            {
+                argsBuilder.Add("--revision");
+                argsBuilder.Add(refSpec);
+            }
+
+            string arguments = string.Join(" ", argsBuilder.Select(a => a.Contains(' ') ? $"\"{a}\"" : a));
+
+            var psi = new ProcessStartInfo
+            {
+                FileName = GitCommand,
+                Arguments = arguments,
+                WorkingDirectory = SourceDirectory.FullName,
+                RedirectStandardOutput = true,
+                RedirectStandardError = true,
+                UseShellExecute = false
+            };
+
+            using var process = new Process { StartInfo = psi };
+            process.Start();
+            string errorOutput = await process.StandardError.ReadToEndAsync();
+            await process.WaitForExitAsync();
+
+            if (process.ExitCode != 0)
+            {
+                throw new Exception($"Git clone failed (exit code {process.ExitCode}): {errorOutput}");
+            }
+
+            trackedSources[index] = new DirectoryInfo(clonePath);
         }
         else
         {
@@ -245,19 +362,19 @@ public class PackageBuilder
     /// <exception cref="Exception">Thrown when the checksum algorithm is not supported.</exception>
     public async Task<bool> VerifySourceAsync(int index)
     {
+        var entry = trackedSources[index];
+        if (entry == null)
+        {
+            return false;
+        }
         if (Recipe.SourceChecksums[index] == "SKIP")
         {
             return true;
         }
+
         var seg = Recipe.SourceChecksums[index].Split(':');
         var algo = seg[0];
         var checksum = seg[1];
-        var file = trackedSources[index];
-        if (file == null)
-        {
-            return false;
-        }
-
         HashAlgorithm hashAlgo = algo switch
         {
             "sha1" => SHA1.Create(),
@@ -266,8 +383,20 @@ public class PackageBuilder
             "md5" => MD5.Create(),
             _ => throw new Exception($"Unsupported checksum algorithm: {algo}"),
         };
-        var hash = hashAlgo.ComputeHash(File.ReadAllBytes(file.FullName));
-        return Convert.ToHexString(hash).Equals(checksum, StringComparison.CurrentCultureIgnoreCase);
+
+        if (entry is FileInfo file)
+        {
+            var hash = hashAlgo.ComputeHash(File.ReadAllBytes(file.FullName));
+            return Convert.ToHexString(hash).Equals(checksum, StringComparison.CurrentCultureIgnoreCase);
+        }
+
+        if (entry is DirectoryInfo)
+        {
+            // Always consider the folder source invalid; checks of folders must be explicitly skipped
+            return false;
+        }
+
+        return false;
     }
 
     /// <summary>
