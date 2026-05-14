@@ -4,44 +4,66 @@ The goal for 0.1.0 is a working CLI that can init environments, build packages
 from Lua recipes, install/uninstall packages with dependency resolution, and
 manage installed packages.
 
-Current state: the core library and PackageCraft build pipeline are ~90%
-complete. All 8 CLI commands have argument plumbing wired via
-`System.CommandLine` but every handler throws `NotImplementedException`.
+## Current State (May 2026)
+
+The core library and PackageCraft build pipeline are ~95% complete.
+`Pacmine.Environment` has lock/lifecycle and basic persistence (`PackageList`,
+`ManagedFiles`) but no registry management API. All 8 CLI commands have
+`System.CommandLine` argument plumbing but every handler is a stub. No package
+installation engine, no dependency resolver, no onboard wizard, no tests exist.
+
+| Layer | % Done | Notes |
+|---|---|---|
+| Pacmine.Core | 100% | `VersionIdentifier`, `VersionRange`, `PackageMeta` — all complete with SemVer 2.0 + npm ranges via `semver` 3.0.0 |
+| Pacmine.PackageCraft | 95% | Build pipeline complete (HTTP download, git clone, checksum verify, Lua phases, ZIP compression). Only `GlobalFunctions.Print()` and `GitCall()` are stubs. |
+| Pacmine.Environment | 40% | Lock/unlock/create/destroy lifecycle done. `PackageList` and `ManagedFiles` persist to disk. `PackageRegistry` data model defined but no save/load. No registry management API. |
+| Pacmine.Console (CLI) | 5% | 8 commands registered with argument/option plumbing. Every handler throws `NotImplementedException`. |
+| Onboard Wizard | 0% | `RunAsync()` is a stub. |
+| Tests | 0% | No test project. |
 
 ---
 
-## M1 — Foundation Fixes
+## M1 — Finish the Build Pipeline
 
-Eliminate known bugs in already-implemented code. The build pipeline must be
-rock-solid before building anything on top of it.
+Close the last remaining stubs in PackageCraft so the build pipeline is
+100% complete.
 
-- [x] **FilesysLuaLibrary sandbox logic**
-- [x] **Recursive directory deletion**
-- [x] **File handle leak**
-- [x] **Cross-process lock safety**
-- [x] **Git source support in PackageBuilder**
+- [ ] **`GlobalFunctions.Print()`** — forward the message to the builder's
+  output (console write or an output callback). Currently an empty
+  `// TODO: Implement` stub at `GlobalFunctions.cs:46`.
+
+- [ ] **`GlobalFunctions.GitCall()`** — launch the `git` process (path stored in
+  `PackageBuilder.GitCommand`) with the given arguments, capture stdout/stderr,
+  return the exit code. Currently returns hardcoded `-1` at
+  `GlobalFunctions.cs:61`.
+
 ---
 
 ## M2 — Registry Persistence
 
 Packages installed to disk must be remembered across process restarts.
+(`PackageList` and `ManagedFiles` already persist via `PacmineEnvironment`
+properties — this milestone adds the per-package registry layer.)
 
 - [ ] **PackageRegistry JSON serialization** — add `Save()` and `Load()` to
   `PackageRegistry.cs` using `System.Text.Json`. Write each entry to
-  `{RegistryFolder}/<packageNameInitialLetter>/{package-name}.json`. Ensure `VersionIdentifier` and
+  `{RegistryFolder}/{package-name}.json`. Verify `VersionIdentifier` and
   `VersionRange` round-trip correctly through their `ToString()` / constructor
   pattern.
 
-- [ ] **Registry management API on PacmineEnvironment** — add methods to
-  `PacmineEnvironment.cs`:
+- [ ] **Registry management API on PacmineEnvironment** — add methods:
   - `PackageRegistry? GetInstalledPackage(string name)`
   - `IEnumerable<PackageRegistry> GetAllInstalledPackages()`
   - `void AddInstalledPackage(PackageRegistry registry)`
   - `void RemoveInstalledPackage(string name)`
+  Each method reads/writes the `{RegistryFolder}/{name}.json` file and keeps
+  `PackageList` in sync.
 
-- [ ] **Packlist synchronization** — keep the `packlist` text file in sync with
-  registry entries. The `PackageList` property already reads/writes the file;
-  integrate it into the new registry methods.
+- [ ] **Environment package config** — implement the `env` command's config
+  store as a simple JSON key-value file at `{SpecialFolder}/env.conf` with
+  `GetEnvPackage(string name)` and `SetEnvPackage(string name, string version)`
+  methods on `PacmineEnvironment`. Used by the dependency resolver to satisfy
+  packages that depend on Minecraft/Fabric/Java versions.
 
 ---
 
@@ -52,26 +74,31 @@ checking, file extraction, registry update.
 
 - [ ] **Package archive reader** — new `PackageArchiveReader.cs` in
   `Pacmine.Environment`: open a `.pacminepack.zip`, extract the embedded
-  `meta.json`, enumerate files and their contents. Reuse the
-  `ZipFile` API already used in `PackageBuilder.CompressPackageAsync`.
+  `meta.json` into a `PackageMeta` object, enumerate files and their contents.
+  Reuse the `ZipFile` API already used in `PackageBuilder.CompressPackageAsync`.
 
 - [ ] **Dependency resolver** — new `DependencyResolver.cs` in
   `Pacmine.Environment`: given a candidate package's `Depends`, `Conflicts`,
-  `Provides`, and `Replaces` dictionaries, verify against all installed
-  packages. Return a result with pass/fail and a human-readable reason string
-  for failures.
+  `Provides`, and `Replaces` dictionaries, verify against installed packages
+  (from registry) AND env packages (from env.conf). Return a result with
+  pass/fail and a human-readable reason string for each failure.
 
 - [ ] **Package installer** — new `PackageInstaller.cs` in
-  `Pacmine.Environment`: orchestrate the full flow — open archive → resolve
-  dependencies → extract files to instance root → compute and record SHA-256
-  checksums → write `PackageRegistry` entry → update packlist. On failure,
-  roll back any extracted files before writing the registry.
+  `Pacmine.Environment`: orchestrate the full flow:
+  1. Open the archive and read metadata.
+  2. Resolve dependencies via `DependencyResolver`.
+  3. Extract files to the instance root.
+  4. Compute SHA-256 checksums for each extracted file.
+  5. Record files in `ManagedFiles` (using `ManagedFileRecord`).
+  6. Write `PackageRegistry` entry via the registry API.
+  7. Update `PackageList`.
+  On failure, roll back extracted files and do not write registry.
 
 - [ ] **Package uninstaller** — method on `PackageInstaller` or
-  `PacmineEnvironment`: remove package files (skip any file also owned by
-  another installed package), remove registry entry, update packlist. Refuse
-  to uninstall packages that are still depended on by others unless
-  `--force`.
+  `PacmineEnvironment`: for each named package, remove its files (skip any file
+  also owned by another package per `ManagedFiles`), remove its
+  `ManagedFileRecord` entries, remove the registry entry, update `PackageList`.
+  Refuse to uninstall packages still depended on by others unless `--force`.
 
 - [ ] **Topological install ordering** — in the dependency resolver, sort
   packages so dependents are installed after their dependencies. Simple tree
@@ -86,43 +113,54 @@ checking, file extraction, registry update.
 ## M4 — CLI Command Implementations
 
 Wire all 8 commands to the engine. The CLI becomes functional end-to-end.
+Option names below match the current `System.CommandLine` definitions.
 
-- [ ] **`init`** — `InitCommand.cs`: call `PacmineEnvironment.Create(path)`.
-  Support `--root` / `-r` to specify the instance directory.
+- [ ] **`init [dir]`** — `InitCommand.cs`: call `PacmineEnvironment.Create(dir)`.
+  If `--skip-onboard` / `-s` is not set, run the onboard wizard (M5).
+  Defaults `dir` to the shell's working directory.
 
-- [ ] **`build`** — `BuildCommand.cs`: call `PackageBuilder.CreateAsync(script)`
-  → `InitEnvironment()` → `FetchSourceAsync` for each source → `VerifySourceAsync`
-  → `InvokePrepareAsync` → `InvokeGetVersionAsync` → `InvokeBuildAsync` →
-  `InvokeCheckAsync` → `InvokePackageAsync` → `CompressPackageAsync` →
-  `CleanUpAsync`. Support `--output` / `-o`, `--no-checksum`, and
-  `--keep-workspace` flags.
+- [ ] **`build <pathToLua>`** — `BuildCommand.cs`: invoke the full
+  `PackageBuilder` pipeline:
+  1. `CreateAsync(script)` to parse the Lua recipe.
+  2. `ConfigureWorkingDirector(workingDirectory)`.
+  3. `InitEnvironment()`.
+  4. `FetchSourceAsync` + `VerifySourceAsync` for each source.
+  5. `InvokePrepareAsync()` → `InvokeGetVersionAsync()` →
+     `InvokeBuildAsync()` → `InvokeCheckAsync()` → `InvokePackageAsync()`.
+  6. `CompressPackageAsync()` (unless `--install` / `-i`).
+  7. `CleanUpAsync()` (unless `--no-clean` / `-n`).
+  Support `--working-directory` / `-w`, `--install` / `-i`, and
+  `--no-clean` / `-n`.
 
-- [ ] **`install`** — `InstallCommand.cs`: resolve package names to local
-  `.pacminepack.zip` files (remote repository comes later), then call the
-  install engine. Support `--root` / `-r` and `--reinstall`.
+- [ ] **`install <pkgNameList>`** — `InstallCommand.cs`: resolve each package
+  name to a `.pacminepack.zip` (local file path when `--local` / `-l` is set;
+  remote repository comes later). Call the install engine for each.
+  Support `--root` / `-r`.
 
-- [ ] **`uninstall`** — `UninstallCommand.cs`: call the uninstall engine for
-  each named package. Prompt for confirmation when removing packages that are
-  dependencies of others. Support `--force`.
+- [ ] **`uninstall <pkgNameList>`** — `UninstallCommand.cs`: call the
+  uninstall engine for each named package. Prompt for confirmation when
+  removing packages that are dependencies of others (add `--force` option).
+  Alias: `remove`.
 
 - [ ] **`list`** — `ListCommand.cs`: enumerate installed packages from the
   registry. Default mode shows name and version; `--verbose` / `-v` also shows
   description, install reason, packaged/installed timestamps, and full version
   string including epoch and release.
 
-- [ ] **`env`** — `EnvCommand.cs`: maintain a simple key-value config file at
-  `{SpecialFolder}/env.conf`. `env set <name> <version>` writes an entry;
-  `env unset <name>` removes one. Used by the onboard wizard and the `repair`
-  command to know the target Minecraft/loader/Java versions.
+- [ ] **`env set <name> <version>` / `env unset <name>`** — `EnvCommand.cs`:
+  read/write env package entries via the env config API added in M2. These
+  are separate runtime packages (Minecraft version, loader version, Java
+  version) that regular packages can depend on but are not installed as files.
 
-- [ ] **`repair`** — `RepairCommand.cs`: walk every installed package's
-  `FileList` and `FileSHA256Sums`, verify each file on disk. For any missing
-  or mismatched file, report it and optionally reinstall that package (if
-  `--reinstall` is set). Support `--root` / `-r`.
+- [ ] **`repair [dir]`** — `RepairCommand.cs`: walk every installed package's
+  `FileList` and `FileSHA256Sums`, verify each file on disk against its
+  checksum and `ManagedFiles` record. Report missing/mismatched files.
+  If `--print` / `-p` is NOT set, also reinstall affected packages.
 
-- [ ] **`destroy`** — `DestroyCommand.cs`: call `PacmineEnvironment.Destroy()`.
-  Warn if packages are still installed; `--force` / `-f` skips the prompt.
-  Support `--root` / `-r`.
+- [ ] **`destroy [dir]`** — `DestroyCommand.cs`: uninstall all packages (if
+  `--keep` / `-k` is set, skip file deletion), then call
+  `PacmineEnvironment.Destroy()`. Prompt for confirmation unless `--force`
+  (add this option).
 
 ---
 
@@ -131,13 +169,19 @@ Wire all 8 commands to the engine. The CLI becomes functional end-to-end.
 New users should be able to set up a game instance interactively.
 
 - [ ] **Implement `OnboardWizard.RunAsync()`** — `OnboardWizard.cs:17`:
-  prompt for instance path → detect Minecraft version from existing launcher
-  metadata (`.minecraft/`, Fabric's `instance.json`, NeoForge configs) →
-  prompt for loader type and version if not detected → prompt for Java path →
-  write all values via `env set` equivalents → call `init` under the hood.
+  1. Prompt for instance path.
+  2. Detect Minecraft version from existing launcher metadata (`.minecraft/`,
+     Fabric `instance.json`, NeoForge configs).
+  3. Prompt for loader type and version if not detected.
+  4. Prompt for Java path/version.
+  5. Write all detected values via the env config API (M2).
+  6. Call `PacmineEnvironment.Create(path)` under the hood.
+  Display the interactive flow described in the comment block at
+  `Program.cs:43-98`.
 
 - [ ] **Launcher metadata detection** — parse common launcher directory
-  structures to auto-detect the Minecraft version, reducing manual input.
+  structures to auto-detect the Minecraft version and loader configuration,
+  reducing manual input during onboarding.
 
 ---
 
@@ -147,19 +191,19 @@ Quality-of-life improvements, documentation, and the 0.1.0 tag.
 
 - [ ] **User-friendly error messages** — replace raw `Exception` throws in
   command handlers with formatted console messages. Full stack traces should
-  only appear when a `--debug` flag is passed.
+  only appear when a `--debug` global option is passed.
 
 - [ ] **`--help` coverage audit** — every command, subcommand, argument, and
   option must have a `Description` set in the `System.CommandLine` definition.
   Verify by running `pacmine --help`, `pacmine install --help`, etc.
 
 - [ ] **README usage section** — add a "Getting Started" section to
-  `README.md` and `README-zh.md` with example commands that a new user would
+  `README.md` and `README-zh.md` with example commands a new user would
   actually run: `pacmine init`, `pacmine build example/sodium.lua`,
   `pacmine install sodium`, `pacmine list`.
 
 - [ ] **Example recipe smoke test** — add a CI script or manual test that runs
-  `pacmine build example/sodium-mc26.1-fabric.lua --output /tmp/pacmine-smoke`
+  `pacmine build example/sodium-mc26.1-fabric.lua --working-directory /tmp/pacmine-smoke`
   and asserts that the output `.pacminepack.zip` exists and is a valid ZIP.
 
 - [ ] **Version bump** — set `<Version>0.1.0</Version>` in all four `.csproj`
@@ -173,7 +217,7 @@ Quality-of-life improvements, documentation, and the 0.1.0 tag.
 These features are explicitly deferred past the 0.1.0 release:
 
 - Local package database of remote repositories
-- Download from remote package repository
+- Download from remote package repositories
 - Package search and remote index
 - Full SAT-based dependency resolution (tree-walk is sufficient for v0.1)
 - Plugin system
