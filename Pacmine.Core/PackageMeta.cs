@@ -1,14 +1,36 @@
+using System.Text.RegularExpressions;
+
 namespace Pacmine.Core;
 
 /// <summary>
 /// Represents metadata for a package, including its identity, relationships, and version information.
 /// </summary>
-public class PackageMeta
+public partial class PackageMeta
 {
+    /// <summary>
+    /// Get a regex pattern for validating package names.
+    /// Package name can only consist of lowercase letters(a-z), digits(0-9), hyphens(-), underscores(_), and periods(.),
+    /// and must start with a letter or digit.
+    /// </summary>
+    /// <returns>A regex pattern for validating package names.</returns>
+    [GeneratedRegex(@"^[a-z0-9][a-z0-9\-_\.]*$")]
+    public static partial Regex PackageNameRegex();
+
+    private string _name = null!;
+
     /// <summary>
     /// Gets or sets the name of the package.
     /// </summary>
-    public required string Name { get; set; }
+    public required string Name
+    {
+        get => _name;
+        set
+        {
+            if (!PackageNameRegex().IsMatch(value))
+                throw new ArgumentException("Invalid package name");
+            _name = value;
+        }
+    }
 
     /// <summary>
     /// Gets or sets the description of the package.

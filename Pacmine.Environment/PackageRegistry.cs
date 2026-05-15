@@ -14,14 +14,9 @@ public class PackageRegistry
     public required PackageMeta Meta { get; set; }
 
     /// <summary>
-    /// Gets or sets the list of file paths owned by this package.
+    /// Gets or sets the list of files owned by this package. Every entry is (file path, SHA256 checksum).
     /// </summary>
-    public string[] FileList { get; set; } = [];
-
-    /// <summary>
-    /// Gets or sets the SHA-256 checksums of the package files, in the same order as <see cref="FileList"/>.
-    /// </summary>
-    public string[] FileSHA256Sums { get; set; } = [];
+    public Dictionary<string, string> FileList { get; set; } = [];
 
     /// <summary>
     /// Gets or sets the reason why the package was installed.
