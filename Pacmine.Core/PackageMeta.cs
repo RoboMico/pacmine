@@ -127,4 +127,52 @@ public partial class PackageMeta
             return Version > other.Version;
         return Release > other.Release;
     }
+
+    /// <summary>
+    /// Determines whether this package conflicts with the specified package.
+    /// Checks both direct package-to-package conflict declarations and virtual packages
+    /// (i.e. packages provided via the <see cref="Provides"/> property).
+    /// Virtual packages have their own explicit versions (from <see cref="Provides"/>),
+    /// which are used when checking version ranges — they are NOT inherited from the provider.
+    /// </summary>
+    /// <param name="other">The other package to check against.</param>
+    /// <returns><c>true</c> if this package conflicts with the other package; otherwise, <c>false</c>.</returns>
+    public bool IsConflictingWith(PackageMeta other)
+    {
+        // Check if this package's Conflicts covers the other package (by its own name)
+        if (Conflicts.TryGetValue(other.Name, out var range))
+        {
+            if (range.Contains(other.Version))
+                return true;
+        }
+
+        // Check if this package's Conflicts covers any virtual package that the other provides
+        foreach (var (virtualName, virtualVersion) in other.Provides)
+        {
+            if (Conflicts.TryGetValue(virtualName, out var virtualRange))
+            {
+                if (virtualRange.Contains(virtualVersion))
+                    return true;
+            }
+        }
+
+        // Check if the other package's Conflicts covers this package (by its own name)
+        if (other.Conflicts.TryGetValue(Name, out var otherRange))
+        {
+            if (otherRange.Contains(Version))
+                return true;
+        }
+
+        // Check if the other package's Conflicts covers any virtual package that this provides
+        foreach (var (virtualName, virtualVersion) in Provides)
+        {
+            if (other.Conflicts.TryGetValue(virtualName, out var otherVirtualRange))
+            {
+                if (otherVirtualRange.Contains(virtualVersion))
+                    return true;
+            }
+        }
+
+        return false;
+    }
 }

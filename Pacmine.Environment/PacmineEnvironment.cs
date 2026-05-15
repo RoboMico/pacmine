@@ -1,6 +1,7 @@
 using System.Security.Cryptography;
 using System.Text;
 using System.Text.Json;
+using Pacmine.Core;
 
 namespace Pacmine.Environment;
 
@@ -10,12 +11,16 @@ namespace Pacmine.Environment;
 /// </summary>
 public class PacmineEnvironment : IDisposable
 {
-    public record ManagedFileRecord(string Owner, string SHA256)
-    {
-    }
+    /// <summary>
+    /// Represents a file managed by a package, tracking its owner and SHA256 checksum.
+    /// </summary>
+    /// <param name="Owner">The name of the package that owns this file.</param>
+    /// <param name="SHA256">The SHA256 checksum of the file contents.</param>
+    public record ManagedFileRecord(string Owner, string SHA256);
 
-    private List<string> _packList = [];
+    private Dictionary<string, VersionIdentifier> _packList = [];
     private Dictionary<string, ManagedFileRecord> _mngFiles = [];
+    private Dictionary<string, Dictionary<string, VersionRange>> _denyList = [];
     private FileStream? _lockStream;
 
     /// <summary>
@@ -36,12 +41,17 @@ public class PacmineEnvironment : IDisposable
     /// <summary>
     /// The name of the file storing the list of installed packages.
     /// </summary>
-    public const string PACKLIST_FILE_NAME = "packlist";
+    public const string PACKLIST_FILE_NAME = "packlist.json";
 
     /// <summary>
     /// The name of the file storing the list of managed files.
     /// </summary>
     public const string MANAGED_FILE_LIST_FILE_NAME = "managed_files.json";
+
+    /// <summary>
+    /// The name of the file storing the deny list.
+    /// </summary>
+    public const string DENY_LIST_FILE_NAME = "deny_list.json";
 
     private PacmineEnvironment(string path)
     {
@@ -51,6 +61,7 @@ public class PacmineEnvironment : IDisposable
         LockFile = new(System.IO.Path.Combine(SpecialFolder.FullName, LOCKFILE_NAME));
         PackListFile = new(System.IO.Path.Combine(SpecialFolder.FullName, PACKLIST_FILE_NAME));
         ManagedFileListFile = new(System.IO.Path.Combine(SpecialFolder.FullName, MANAGED_FILE_LIST_FILE_NAME));
+        DenyListFile = new(System.IO.Path.Combine(SpecialFolder.FullName, DENY_LIST_FILE_NAME));
     }
 
     /// <summary>
@@ -82,6 +93,11 @@ public class PacmineEnvironment : IDisposable
     /// Gets the file information of <see cref="MANAGED_FILE_LIST_FILE_NAME"/> in this environment.
     /// </summary>
     public FileInfo ManagedFileListFile { get; private set; }
+
+    /// <summary>
+    /// Gets the file information of <see cref="DENY_LIST_FILE_NAME"/> in this environment.
+    /// </summary>
+    public FileInfo DenyListFile { get; private set; }
 
     private void Lock()
     {
@@ -143,7 +159,7 @@ public class PacmineEnvironment : IDisposable
     /// Gets the process ID of the process that currently holds the lock for the specified directory.
     /// </summary>
     /// <param name="directory">The environment root directory.</param>
-    /// <returns>The process ID of the locker, or -1 if the environment is not locked.</returns>
+    /// <returns>The process ID of the locker, or -1 if the lock file does not exist or cannot be read.</returns>
     public static int GetLockerPid(string directory)
     {
         var lockFile = new FileInfo(System.IO.Path.Combine(directory, SPECIAL_FOLDER_NAME, LOCKFILE_NAME));
@@ -184,7 +200,9 @@ public class PacmineEnvironment : IDisposable
         // Load packlist; treat missing or corrupted files as empty
         try
         {
-            env._packList = File.ReadAllLines(env.PackListFile.FullName).ToList();
+            var rawDict = JsonSerializer.Deserialize<Dictionary<string, string>>(
+                File.ReadAllText(env.PackListFile.FullName)) ?? [];
+            env._packList = rawDict.ToDictionary(kvp => kvp.Key, kvp => new VersionIdentifier(kvp.Value));
         }
         catch
         {
@@ -202,11 +220,30 @@ public class PacmineEnvironment : IDisposable
             env._mngFiles = [];
         }
 
+        // Load deny list; treat missing or corrupted files as empty.
+        // Stored as Dictionary<string, Dictionary<string, string>> where the innermost strings
+        // are VersionRange.ToString() representations.
+        try
+        {
+            var rawDenyList = JsonSerializer.Deserialize<Dictionary<string, Dictionary<string, string>>>(
+                File.ReadAllText(env.DenyListFile.FullName)) ?? [];
+            env._denyList = rawDenyList.ToDictionary(
+                outer => outer.Key,
+                outer => outer.Value.ToDictionary(
+                    inner => inner.Key,
+                    inner => new VersionRange(inner.Value)));
+        }
+        catch
+        {
+            env._denyList = [];
+        }
+
         return env;
     }
 
     /// <summary>
-    /// Rebuilds <c>packlist</c> and <c>managed_files.json</c> from the existing registry records.
+    /// Rebuilds <see cref="PackListFile"/>, <see cref="ManagedFileListFile"/>,
+    /// and <see cref="DenyListFile"/> from the existing registry records.
     /// Call this to repair a corrupted environment where registry JSON files are intact
     /// but the auxiliary index files are missing or out of sync.
     /// </summary>
@@ -218,15 +255,33 @@ public class PacmineEnvironment : IDisposable
 
         bool repaired = false;
 
-        // Scan registry to rebuild package names list
-        var packageNames = new List<string>();
+        // Scan registry to rebuild package list (names → versions + virtual packages)
+        var packageNames = new Dictionary<string, VersionIdentifier>();
         try
         {
             foreach (var subDir in RegistryFolder.EnumerateDirectories())
             {
                 foreach (var file in subDir.EnumerateFiles("*.json"))
                 {
-                    packageNames.Add(System.IO.Path.GetFileNameWithoutExtension(file.Name));
+                    try
+                    {
+                        var registry = JsonSerializer.Deserialize<PackageRegistry>(
+                            File.ReadAllText(file.FullName));
+                        if (registry == null) continue;
+
+                        // Add the package itself
+                        packageNames[registry.Meta.Name] = registry.Meta.Version;
+
+                        // Add virtual packages this package provides
+                        foreach (var (virtualName, virtualVersion) in registry.Meta.Provides)
+                        {
+                            packageNames[virtualName] = virtualVersion;
+                        }
+                    }
+                    catch
+                    {
+                        // skip corrupt registry entries
+                    }
                 }
             }
         }
@@ -238,10 +293,13 @@ public class PacmineEnvironment : IDisposable
         if (packageNames.Count > 0)
         {
             // Only write if the current list is different from the scanned result
-            if (!_packList.OrderBy(x => x).SequenceEqual(packageNames.OrderBy(x => x)))
+            var serializedCurrent = JsonSerializer.Serialize(_packList.ToDictionary(kvp => kvp.Key, kvp => kvp.Value.RawString));
+            var serializedScanned = JsonSerializer.Serialize(packageNames.ToDictionary(kvp => kvp.Key, kvp => kvp.Value.RawString));
+            if (serializedCurrent != serializedScanned)
             {
                 _packList = packageNames;
-                File.WriteAllLines(PackListFile.FullName, _packList);
+                File.WriteAllText(PackListFile.FullName,
+                    JsonSerializer.Serialize(_packList.ToDictionary(kvp => kvp.Key, kvp => kvp.Value.RawString)));
                 repaired = true;
             }
         }
@@ -289,6 +347,55 @@ public class PacmineEnvironment : IDisposable
             }
         }
 
+        // Scan registry to rebuild deny list from conflict declarations
+        var denyList = new Dictionary<string, Dictionary<string, VersionRange>>();
+        try
+        {
+            foreach (var subDir in RegistryFolder.EnumerateDirectories())
+            {
+                foreach (var file in subDir.EnumerateFiles("*.json"))
+                {
+                    try
+                    {
+                        var registry = JsonSerializer.Deserialize<PackageRegistry>(
+                            File.ReadAllText(file.FullName));
+                        if (registry == null) continue;
+
+                        if (registry.Meta.Conflicts.Count > 0)
+                        {
+                            denyList[registry.Meta.Name] = new Dictionary<string, VersionRange>(registry.Meta.Conflicts);
+                        }
+                    }
+                    catch
+                    {
+                        // skip corrupt registry entries
+                    }
+                }
+            }
+        }
+        catch
+        {
+            // best-effort scan
+        }
+
+        var serializedDenyCurrent = JsonSerializer.Serialize(
+            _denyList.ToDictionary(outer => outer.Key,
+                outer => outer.Value.ToDictionary(inner => inner.Key, inner => inner.Value.ToString())));
+        var serializedDenyScanned = JsonSerializer.Serialize(
+            denyList.ToDictionary(outer => outer.Key,
+                outer => outer.Value.ToDictionary(inner => inner.Key, inner => inner.Value.ToString())));
+        if (serializedDenyCurrent != serializedDenyScanned)
+        {
+            _denyList = denyList;
+            var serializable = _denyList.ToDictionary(
+                outer => outer.Key,
+                outer => outer.Value.ToDictionary(
+                    inner => inner.Key,
+                    inner => inner.Value.ToString()));
+            File.WriteAllText(DenyListFile.FullName, JsonSerializer.Serialize(serializable));
+            repaired = true;
+        }
+
         return repaired;
     }
 
@@ -305,10 +412,81 @@ public class PacmineEnvironment : IDisposable
             throw new Exception("Environment already created");
 
         Directory.CreateDirectory(databasePath);
-        File.Create(System.IO.Path.Combine(databasePath, PACKLIST_FILE_NAME)).Dispose();
-        File.Create(System.IO.Path.Combine(databasePath, MANAGED_FILE_LIST_FILE_NAME)).Dispose();
+        File.WriteAllText(System.IO.Path.Combine(databasePath, PACKLIST_FILE_NAME), "{}");
+        File.WriteAllText(System.IO.Path.Combine(databasePath, MANAGED_FILE_LIST_FILE_NAME), "{}");
+        File.WriteAllText(System.IO.Path.Combine(databasePath, DENY_LIST_FILE_NAME), "{}");
+        Directory.CreateDirectory(System.IO.Path.Combine(databasePath, REGISTRY_FOLDER_NAME));
 
         return Access(directory);
+    }
+
+    /// <summary>
+    /// Checks if the specified packages are acceptable in the environment (no conflict, dependencies satisfied, etc).
+    /// Note that this method does not check the internal compatibility of <paramref name="packages"/>.
+    /// See <see cref="PackageMeta.IsConflictingWith(PackageMeta)"/> for that.
+    /// </summary>
+    /// <param name="packages">The package list to check.</param>
+    /// <returns>An array of <see cref="UnacceptReason"/> indicating why each package is unacceptable.</returns>
+    public UnacceptReason[] CheckAcceptance(PackageMeta[] packages)
+    {
+        var reasons = new List<UnacceptReason>();
+
+        foreach (var pkgMeta in packages)
+        {
+            // 1. Check DenyList: any installed package denies this package?
+            //    DenyList is keyed by conflict source (installed package name),
+            //    value maps denied package name → version range.
+            foreach (var (conflictSource, deniedPackages) in DenyList)
+            {
+                // Check the package's own name
+                if (deniedPackages.TryGetValue(pkgMeta.Name, out var range))
+                {
+                    if (range.Contains(pkgMeta.Version))
+                        reasons.Add(new ConflictUnacceptReason(pkgMeta.Name, conflictSource, range));
+                }
+
+                // Check virtual packages this package provides
+                foreach (var (virtualName, virtualVersion) in pkgMeta.Provides)
+                {
+                    if (deniedPackages.TryGetValue(virtualName, out var virtualRange))
+                    {
+                        if (virtualRange.Contains(virtualVersion))
+                            reasons.Add(new ConflictUnacceptReason(pkgMeta.Name, conflictSource, virtualRange));
+                    }
+                }
+            }
+
+            // 2. Check this package's own Conflicts against installed packages
+            //    (the reverse direction — the incoming package denies an installed one)
+            foreach (var (conflictedPkg, conflictRange) in pkgMeta.Conflicts)
+            {
+                if (PackageList.TryGetValue(conflictedPkg, out var installedVersion))
+                {
+                    if (conflictRange.Contains(installedVersion))
+                        reasons.Add(new ConflictUnacceptReason(pkgMeta.Name, conflictedPkg, conflictRange));
+                }
+            }
+
+            // 3. Check missing or unsatisfied dependencies
+            foreach (var (depName, depRange) in pkgMeta.Depends)
+            {
+                if (!PackageList.TryGetValue(depName, out var installedVersion) || !depRange.Contains(installedVersion))
+                {
+                    reasons.Add(new MissingDependsUnacceptReason(pkgMeta.Name, depName, depRange));
+                }
+            }
+
+            // 4. Check if this package replaces any already-installed package
+            foreach (var (replacedPkg, _) in pkgMeta.Replaces)
+            {
+                if (PackageList.ContainsKey(replacedPkg))
+                {
+                    reasons.Add(new PackageReplacedUnacceptReason(pkgMeta.Name, replacedPkg));
+                }
+            }
+        }
+
+        return reasons.ToArray();
     }
 
     /// <summary>
@@ -347,13 +525,30 @@ public class PacmineEnvironment : IDisposable
 
         ManagedFiles = newMngFileList;
 
-        // Ensure the package is listed in the package list
+        // Ensure the package is listed in the package list (with its version)
         var packList = PackageList;
-        if (!packList.Contains(registry.Meta.Name))
+        packList[registry.Meta.Name] = registry.Meta.Version;
+
+        // Add virtual packages that this package provides
+        foreach (var (virtualName, virtualVersion) in registry.Meta.Provides)
         {
-            packList.Add(registry.Meta.Name);
-            PackageList = packList;
+            packList[virtualName] = virtualVersion;
         }
+
+        PackageList = packList;
+
+        // Sync deny list: add/update this package's conflict declarations
+        var newDenyList = DenyList;
+        if (registry.Meta.Conflicts.Count > 0)
+        {
+            newDenyList[registry.Meta.Name] = new Dictionary<string, VersionRange>(registry.Meta.Conflicts);
+        }
+        else
+        {
+            // No conflicts declared — remove this package's entry if it exists
+            newDenyList.Remove(registry.Meta.Name);
+        }
+        DenyList = newDenyList;
     }
 
     /// <summary>
@@ -372,6 +567,10 @@ public class PacmineEnvironment : IDisposable
         if (!registryFile.Exists)
             throw new Exception($"Package '{packageName}' does not exist in the registry");
 
+        // Read the registry before deleting it, so we can access virtual package info
+        var registry = JsonSerializer.Deserialize<PackageRegistry>(
+            File.ReadAllText(registryFile.FullName));
+
         registryFile.Delete();
 
         // Remove managed file entries owned by this package
@@ -388,10 +587,23 @@ public class PacmineEnvironment : IDisposable
 
         // Remove the package from the package list
         var packList = PackageList;
-        if (packList.Remove(packageName))
+        packList.Remove(packageName);
+
+        // Also remove any virtual packages that this package provides
+        if (registry != null)
         {
-            PackageList = packList;
+            foreach (var virtualName in registry.Meta.Provides.Keys)
+            {
+                packList.Remove(virtualName);
+            }
         }
+
+        PackageList = packList;
+
+        // Remove deny list entry for this package
+        var newDenyList = DenyList;
+        newDenyList.Remove(packageName);
+        DenyList = newDenyList;
     }
 
     /// <summary>
@@ -426,9 +638,10 @@ public class PacmineEnvironment : IDisposable
     /// Check if there are any conflicts between the specified file list and the files in this environment.
     /// </summary>
     /// <param name="fileNames">The list of file names to check for conflicts.</param>
-    /// <param name="ignoredOwners">The list of package names to ignore when checking for conflicts.</param>
-    /// <returns>A dictionary of (conflicting file name, owner).
-    /// Owner is empty if the file exists in the environment but not owned by any package(orphan file).</returns>
+    /// <param name="ignoredOwners">The list of package names whose files should be ignored when checking for conflicts.
+    /// Pass an empty array to check against all managed files.</param>
+    /// <returns>A dictionary mapping each conflicting file name to its owner.
+    /// An empty owner string indicates an orphan file (exists on disk but not managed by any package).</returns>
     public Dictionary<string, string> CheckConflictFiles(string[] fileNames, string[] ignoredOwners)
     {
         var conflicts = new Dictionary<string, string>();
@@ -544,15 +757,17 @@ public class PacmineEnvironment : IDisposable
     }
 
     /// <summary>
-    /// Gets the list of installed package names.
+    /// Gets the dictionary of installed packages and their versions.
+    /// Includes virtual packages provided by installed packages.
     /// </summary>
-    public List<string> PackageList
+    public Dictionary<string, VersionIdentifier> PackageList
     {
         get => _packList;
-        set
+        private set
         {
             _packList = value;
-            File.WriteAllLines(PackListFile.FullName, _packList);
+            File.WriteAllText(PackListFile.FullName,
+                JsonSerializer.Serialize(_packList.ToDictionary(kvp => kvp.Key, kvp => kvp.Value.RawString)));
         }
     }
 
@@ -562,10 +777,33 @@ public class PacmineEnvironment : IDisposable
     public Dictionary<string, ManagedFileRecord> ManagedFiles
     {
         get => _mngFiles;
-        set
+        private set
         {
             _mngFiles = value;
             File.WriteAllText(ManagedFileListFile.FullName, JsonSerializer.Serialize(_mngFiles));
+        }
+    }
+
+    /// <summary>
+    /// Gets the list of packages that are denied to be installed because of conflicts.
+    /// Key is conflict source, value is a dictionary of (package name, version range).
+    /// This property only serves as a cache of the <see cref="PackageMeta.Conflicts"/> properties of all packages,
+    /// so that file conflicts are ignored - it is caller's responsibility to check file conflicts before trying to
+    /// install a package. See <see cref="CheckConflictFiles(string[], string[])"/>.
+    /// </summary>
+    public Dictionary<string, Dictionary<string, VersionRange>> DenyList
+    {
+        get => _denyList;
+        private set
+        {
+            _denyList = value;
+            // Serialize as Dictionary<string, Dictionary<string, string>> so VersionRange is stored as its string
+            var serializable = _denyList.ToDictionary(
+                outer => outer.Key,
+                outer => outer.Value.ToDictionary(
+                    inner => inner.Key,
+                    inner => inner.Value.ToString()));
+            File.WriteAllText(DenyListFile.FullName, JsonSerializer.Serialize(serializable));
         }
     }
 
