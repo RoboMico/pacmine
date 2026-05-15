@@ -13,7 +13,7 @@ recipe.meta = {
   epoch = 0,
   provides = {
     sodium = "0.8.9",
-    indium = "1"
+    indium = "1.0"
   },
   depends = {
     fabricloader = ">=0.16.0",
