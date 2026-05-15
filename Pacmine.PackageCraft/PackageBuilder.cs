@@ -69,12 +69,12 @@ public class PackageBuilder
     /// <summary>
     /// Gets whether arbitrary file operations outside the source and package directories are allowed. Defaults to <c>false</c>.
     /// </summary>
-    public bool AllowArbitaryFileOperation { get; private set; } = false;
+    public bool AllowArbitraryFileOperation { get; private set; } = false;
 
     /// <summary>
     /// Gets whether shell execution is allowed from Lua scripts. Defaults to <c>false</c>.
     /// </summary>
-    public bool AllowShellExceution { get; private set; } = false;
+    public bool AllowShellExecution { get; private set; } = false;
 
     /// <summary>
     /// Gets the command to execute for Git operations. <c>null</c> if Git is not available.
@@ -130,7 +130,7 @@ public class PackageBuilder
     /// </summary>
     /// <param name="workingDir">The path to the working directory.</param>
     /// <returns>This <see cref="PackageBuilder"/> instance for chaining.</returns>
-    public PackageBuilder ConfigureWorkingDirector(string workingDir)
+    public PackageBuilder ConfigureWorkingDirectory(string workingDir)
     {
         WorkingDirectory = new DirectoryInfo(workingDir);
         SourceDirectory = new DirectoryInfo(Path.Combine(workingDir, "src"));
@@ -199,9 +199,9 @@ public class PackageBuilder
     /// </summary>
     /// <param name="allow"><c>true</c> to allow; otherwise, <c>false</c>.</param>
     /// <returns>This <see cref="PackageBuilder"/> instance for chaining.</returns>
-    public PackageBuilder ConfigureArbitaryFileOperation(bool allow)
+    public PackageBuilder ConfigureArbitraryFileOperation(bool allow)
     {
-        AllowArbitaryFileOperation = allow;
+        AllowArbitraryFileOperation = allow;
         return this;
     }
 
@@ -210,9 +210,9 @@ public class PackageBuilder
     /// </summary>
     /// <param name="allow"><c>true</c> to allow; otherwise, <c>false</c>.</param>
     /// <returns>This <see cref="PackageBuilder"/> instance for chaining.</returns>
-    public PackageBuilder ConfigureShellExceution(bool allow)
+    public PackageBuilder ConfigureShellExecution(bool allow)
     {
-        AllowShellExceution = allow;
+        AllowShellExecution = allow;
         return this;
     }
 

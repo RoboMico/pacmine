@@ -50,7 +50,7 @@ public partial class FilesysLuaLibrary
         dest = Path.GetFullPath(ReplacePathVariables(dest));
         // check that source and dest are in builderContext.SourceDirectory
         // or builderContext.PackageDirectory
-        if (!builderContext.AllowArbitaryFileOperation)
+        if (!builderContext.AllowArbitraryFileOperation)
         {
             if (!IsPathAllowed(source) || !IsPathAllowed(dest))
             {
@@ -73,7 +73,7 @@ public partial class FilesysLuaLibrary
         dest = Path.GetFullPath(ReplacePathVariables(dest));
         // check that source and dest are in builderContext.SourceDirectory
         // or builderContext.PackageDirectory
-        if (!builderContext.AllowArbitaryFileOperation)
+        if (!builderContext.AllowArbitraryFileOperation)
         {
             if (!IsPathAllowed(source) || !IsPathAllowed(dest))
             {
@@ -92,7 +92,7 @@ public partial class FilesysLuaLibrary
     public void Delete(string file)
     {
         file = Path.GetFullPath(ReplacePathVariables(file));
-        if (!builderContext.AllowArbitaryFileOperation)
+        if (!builderContext.AllowArbitraryFileOperation)
         {
             if (!IsPathAllowed(file))
             {
@@ -111,7 +111,7 @@ public partial class FilesysLuaLibrary
     public void CreateDirectory(string path)
     {
         path = Path.GetFullPath(ReplacePathVariables(path));
-        if (!builderContext.AllowArbitaryFileOperation)
+        if (!builderContext.AllowArbitraryFileOperation)
         {
             if (!IsPathAllowed(path))
             {

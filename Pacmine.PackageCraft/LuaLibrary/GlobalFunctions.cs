@@ -70,7 +70,7 @@ public class GlobalFunctions
     /// </summary>
     /// <param name="args">The command-line arguments to pass to Git.</param>
     /// <returns>The exit code returned by the Git process.</returns>
-    /// <exception cref="Exception">Thrown when Git functionality is disabled(<see cref="PackageBuilder.GitCommand"/> is <c>null</c>).</exception>
+    /// <exception cref="Exception">Thrown when Git functionality is disabled (<see cref="PackageBuilder.GitCommand"/> is <c>null</c>).</exception>
     public int GitCall(string args)
     {
         if (builderContext.GitCommand == null)
@@ -114,10 +114,10 @@ public class GlobalFunctions
     /// </summary>
     /// <param name="command">The command to execute.</param>
     /// <returns>The exit code returned by the shell process.</returns>
-    /// <exception cref="Exception">Thrown when shell execution is disabled(<see cref="PackageBuilder.AllowShellExceution"/> is <c>false</c>).</exception>
+    /// <exception cref="Exception">Thrown when shell execution is disabled (<see cref="PackageBuilder.AllowShellExecution"/> is <c>false</c>).</exception>
     public int ShellExecute(string command)
     {
-        if (builderContext.AllowShellExceution == false)
+        if (builderContext.AllowShellExecution == false)
         {
             throw new Exception("Shell execution is disabled");
         }
