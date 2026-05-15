@@ -8,11 +8,13 @@ namespace Pacmine.Core;
 public partial class PackageMeta
 {
     /// <summary>
-    /// Get a regex pattern for validating package names.
-    /// Package name can only consist of lowercase letters(a-z), digits(0-9), hyphens(-), underscores(_), and periods(.),
-    /// and must start with a letter or digit.
+    /// Gets a regex pattern for validating package names.
     /// </summary>
-    /// <returns>A regex pattern for validating package names.</returns>
+    /// <remarks>
+    /// Package names may only consist of lowercase letters (a-z), digits (0-9), hyphens (-),
+    /// underscores (_), and periods (.), and must start with a letter or digit.
+    /// </remarks>
+    /// <returns>A compiled regex for package name validation.</returns>
     [GeneratedRegex(@"^[a-z0-9][a-z0-9\-_\.]*$")]
     public static partial Regex PackageNameRegex();
 
@@ -21,6 +23,7 @@ public partial class PackageMeta
     /// <summary>
     /// Gets or sets the name of the package.
     /// </summary>
+    /// <exception cref="ArgumentException">Thrown when the value does not match <see cref="PackageNameRegex()"/>.</exception>
     public required string Name
     {
         get => _name;
@@ -43,7 +46,7 @@ public partial class PackageMeta
     public required string UpstreamUrl { get; set; }
 
     /// <summary>
-    /// Gets or sets the category of the package(mod, resourcepack, shaderpack, etc).
+    /// Gets or sets the category of the package (mod, resourcepack, shaderpack, etc).
     /// </summary>
     public required string Category { get; set; }
 
@@ -59,11 +62,13 @@ public partial class PackageMeta
 
     /// <summary>
     /// Gets or sets the release number of the package. Defaults to 1.
+    /// Incrementing this signals a new build of the same upstream version.
     /// </summary>
     public int Release { get; set; } = 1;
 
     /// <summary>
     /// Gets or sets the epoch number of the package. Defaults to 0.
+    /// Incrementing this resets version comparison semantics (higher epoch always wins).
     /// </summary>
     public int Epoch { get; set; } = 0;
 
@@ -74,26 +79,29 @@ public partial class PackageMeta
 
     /// <summary>
     /// Gets or sets the virtual packages that this package provides.
+    /// Each virtual package is declared with its own <see cref="VersionIdentifier"/>,
+    /// which is NOT inherited from the provider.
     /// </summary>
     public Dictionary<string, VersionIdentifier> Provides { get; set; } = [];
 
     /// <summary>
-    /// Gets or sets the packages that this package depends on.
+    /// Gets or sets the packages that this package depends on, mapped to their required version ranges.
     /// </summary>
     public Dictionary<string, VersionRange> Depends { get; set; } = [];
 
     /// <summary>
-    /// Gets or sets the packages that this package conflicts with.
+    /// Gets or sets the packages that this package conflicts with, mapped to their conflicting version ranges.
     /// </summary>
     public Dictionary<string, VersionRange> Conflicts { get; set; } = [];
 
     /// <summary>
-    /// Gets or sets the packages that this package replaces.
+    /// Gets or sets the packages that this package replaces, mapped to the version ranges being replaced.
     /// </summary>
     public Dictionary<string, VersionRange> Replaces { get; set; } = [];
 
     /// <summary>
-    /// Gets or sets the packages and their descriptions that this package recommends.
+    /// Gets or sets the packages that this package recommends, mapped to their descriptions.
+    /// Recommendations are informational only and do not affect installation acceptance.
     /// </summary>
     public Dictionary<string, string> Recommends { get; set; } = [];
 

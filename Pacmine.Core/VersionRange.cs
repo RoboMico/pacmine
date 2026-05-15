@@ -6,7 +6,7 @@ namespace Pacmine.Core;
 /// Represents a version range expression supporting npm-style syntax including
 /// <c>^</c>, <c>~</c>, <c>&gt;=</c>, <c>&gt;</c>, <c>&lt;=</c>, <c>&lt;</c>,
 /// exact match, wildcard <c>*</c>, <c>x</c>, hyphen ranges, and union <c>||</c>.
-/// Delegates to <see cref="SemVersionRange"/> internally.
+/// Delegates to <see cref="SemVersionRange"/> (parsed via <see cref="SemVersionRange.TryParseNpm(string, bool, out SemVersionRange)"/>) internally.
 /// </summary>
 public class VersionRange
 {

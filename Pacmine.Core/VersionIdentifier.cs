@@ -6,6 +6,9 @@ namespace Pacmine.Core;
 /// Represents a version identifier compliant with Semantic Versioning 2.0.
 /// Wraps <see cref="SemVersion"/> internally for parsing and comparison,
 /// with a fallback to raw string comparison for non-SemVer strings.
+/// Comparison uses <see cref="SemVersion.ComparePrecedenceTo(SemVersion)"/>
+/// when both sides are valid <see cref="SemVersion"/>; otherwise falls back
+/// to ordinal <see cref="string.Compare(string, string, StringComparison)"/>.
 /// </summary>
 public class VersionIdentifier : IComparable<VersionIdentifier>, IEquatable<VersionIdentifier>
 {
@@ -67,8 +70,8 @@ public class VersionIdentifier : IComparable<VersionIdentifier>, IEquatable<Vers
     }
 
     /// <summary>
-    /// Compares this instance to another <see cref="VersionIdentifier"/> using SemVer 2.0 precedence rules
-    /// when both are valid SemVer strings; falls back to ordinal string comparison otherwise.
+    /// Compares this instance to another <see cref="VersionIdentifier"/> using <see cref="SemVersion.ComparePrecedenceTo(SemVersion)"/>
+    /// when both are valid <see cref="SemVersion"/>; falls back to ordinal <see cref="string.Compare(string, string, StringComparison)"/> otherwise.
     /// </summary>
     /// <param name="other">The other version identifier to compare to.</param>
     /// <returns>A value indicating the relative order.</returns>
