@@ -27,6 +27,7 @@ pacmine env - Manage environment packages
 such as minecraft installation, fabric/forge loader, etc.)
 (env packs cannot be uninstalled using "pacmine uninstall")
 (env packs contain no file and depend on no other packages)
+(there is no need to maintain a separate env registry file, env packs are just essentially empty packages)
     pacmine env set <name> <version> - Add a env package(if a new one) or change its version
     pacmine env unset <name> - Remove a env package
 pacmine repair [dir] - Repair all the packages

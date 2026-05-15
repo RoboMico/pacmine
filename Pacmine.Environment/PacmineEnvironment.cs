@@ -181,12 +181,115 @@ public class PacmineEnvironment : IDisposable
         PacmineEnvironment env = new(directory);
         env.Lock();
 
-        env._packList = File.ReadAllLines(env.PackListFile.FullName).ToList();
-        env._mngFiles = JsonSerializer.Deserialize<Dictionary<string, ManagedFileRecord>>(
-            File.ReadAllText(env.ManagedFileListFile.FullName))
-            ?? throw new Exception("Invalid managed files list");
+        // Load packlist; treat missing or corrupted files as empty
+        try
+        {
+            env._packList = File.ReadAllLines(env.PackListFile.FullName).ToList();
+        }
+        catch
+        {
+            env._packList = [];
+        }
+
+        // Load managed files; treat missing or corrupted files as empty
+        try
+        {
+            env._mngFiles = JsonSerializer.Deserialize<Dictionary<string, ManagedFileRecord>>(
+                File.ReadAllText(env.ManagedFileListFile.FullName)) ?? [];
+        }
+        catch
+        {
+            env._mngFiles = [];
+        }
 
         return env;
+    }
+
+    /// <summary>
+    /// Rebuilds <c>packlist</c> and <c>managed_files.json</c> from the existing registry records.
+    /// Call this to repair a corrupted environment where registry JSON files are intact
+    /// but the auxiliary index files are missing or out of sync.
+    /// </summary>
+    /// <returns><c>true</c> if any repairs were made; <c>false</c> if no registry records exist.</returns>
+    public bool Repair()
+    {
+        if (!RegistryFolder.Exists)
+            return false;
+
+        bool repaired = false;
+
+        // Scan registry to rebuild package names list
+        var packageNames = new List<string>();
+        try
+        {
+            foreach (var subDir in RegistryFolder.EnumerateDirectories())
+            {
+                foreach (var file in subDir.EnumerateFiles("*.json"))
+                {
+                    packageNames.Add(System.IO.Path.GetFileNameWithoutExtension(file.Name));
+                }
+            }
+        }
+        catch
+        {
+            // best-effort scan
+        }
+
+        if (packageNames.Count > 0)
+        {
+            // Only write if the current list is different from the scanned result
+            if (!_packList.OrderBy(x => x).SequenceEqual(packageNames.OrderBy(x => x)))
+            {
+                _packList = packageNames;
+                File.WriteAllLines(PackListFile.FullName, _packList);
+                repaired = true;
+            }
+        }
+
+        // Scan registry to rebuild managed files
+        var mngFiles = new Dictionary<string, ManagedFileRecord>();
+        try
+        {
+            foreach (var subDir in RegistryFolder.EnumerateDirectories())
+            {
+                foreach (var file in subDir.EnumerateFiles("*.json"))
+                {
+                    try
+                    {
+                        var registry = JsonSerializer.Deserialize<PackageRegistry>(
+                            File.ReadAllText(file.FullName));
+                        if (registry == null) continue;
+
+                        foreach (var kvp in registry.FileList)
+                        {
+                            mngFiles[kvp.Key] = new ManagedFileRecord(registry.Meta.Name, kvp.Value);
+                        }
+                    }
+                    catch
+                    {
+                        // skip corrupt registry entries
+                    }
+                }
+            }
+        }
+        catch
+        {
+            // best-effort scan
+        }
+
+        if (mngFiles.Count > 0)
+        {
+            var serializedCurrent = JsonSerializer.Serialize(_mngFiles);
+            var serializedScanned = JsonSerializer.Serialize(mngFiles);
+            if (serializedCurrent != serializedScanned)
+            {
+                _mngFiles = mngFiles;
+                File.WriteAllText(ManagedFileListFile.FullName, JsonSerializer.Serialize(_mngFiles));
+                repaired = true;
+            }
+        }
+
+        return repaired;
     }
 
     /// <summary>
@@ -243,6 +346,14 @@ public class PacmineEnvironment : IDisposable
         }
 
         ManagedFiles = newMngFileList;
+
+        // Ensure the package is listed in the package list
+        var packList = PackageList;
+        if (!packList.Contains(registry.Meta.Name))
+        {
+            packList.Add(registry.Meta.Name);
+            PackageList = packList;
+        }
     }
 
     /// <summary>
@@ -274,6 +385,13 @@ public class PacmineEnvironment : IDisposable
             newMngFileList.Remove(file);
         }
         ManagedFiles = newMngFileList;
+
+        // Remove the package from the package list
+        var packList = PackageList;
+        if (packList.Remove(packageName))
+        {
+            PackageList = packList;
+        }
     }
 
     /// <summary>
