@@ -28,14 +28,7 @@ installation engine, no dependency resolver, no onboard wizard, no tests exist.
 Close the last remaining stubs in PackageCraft so the build pipeline is
 100% complete.
 
-- [ ] **`GlobalFunctions.Print()`** — forward the message to the builder's
-  output (console write or an output callback). Currently an empty
-  `// TODO: Implement` stub at `GlobalFunctions.cs:46`.
-
-- [ ] **`GlobalFunctions.GitCall()`** — launch the `git` process (path stored in
-  `PackageBuilder.GitCommand`) with the given arguments, capture stdout/stderr,
-  return the exit code. Currently returns hardcoded `-1` at
-  `GlobalFunctions.cs:61`.
+- [*] GlobalFunctions
 
 ---
 

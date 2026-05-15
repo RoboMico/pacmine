@@ -1,6 +1,7 @@
 using System.Diagnostics;
 using System.IO.Compression;
 using System.Security.Cryptography;
+using System.Text;
 using Downloader;
 using Lua;
 using Pacmine.PackageCraft.LuaLibrary;
@@ -15,6 +16,8 @@ public class PackageBuilder
 {
     private LuaState luaState;
     private FileSystemInfo?[] trackedSources;
+    private readonly StringBuilder _stdoutBuffer = new();
+    private readonly StringBuilder _stderrBuffer = new();
     private static readonly DownloadConfiguration defaultDlConfig = new()
     {
         ChunkCount = 8,
@@ -82,6 +85,30 @@ public class PackageBuilder
     /// Gets the Downloader configuration used for downloading sources.
     /// </summary>
     public DownloadConfiguration DownloadConfig { get; private set; } = defaultDlConfig;
+
+    /// <summary>
+    /// Gets the standard output stream of the build process.
+    /// </summary>
+    public StreamReader StandardOutput
+    {
+        get
+        {
+            var bytes = Encoding.UTF8.GetBytes(_stdoutBuffer.ToString());
+            return new StreamReader(new MemoryStream(bytes));
+        }
+    }
+
+    /// <summary>
+    /// Gets the standard error stream of the build process.
+    /// </summary>
+    public StreamReader StandardError
+    {
+        get
+        {
+            var bytes = Encoding.UTF8.GetBytes(_stderrBuffer.ToString());
+            return new StreamReader(new MemoryStream(bytes));
+        }
+    }
 
     /// <summary>
     /// Creates a new <see cref="PackageBuilder"/> instance by executing the specified Lua script
@@ -486,5 +513,21 @@ public class PackageBuilder
     {
         SourceDirectory?.Delete(true);
         PackageDirectory?.Delete(true);
+    }
+
+    internal void WriteStdout(string message)
+    {
+        lock (_stdoutBuffer)
+        {
+            _stdoutBuffer.Append(message);
+        }
+    }
+
+    internal void WriteStderr(string message)
+    {
+        lock (_stderrBuffer)
+        {
+            _stderrBuffer.Append(message);
+        }
     }
 }

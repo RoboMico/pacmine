@@ -1,3 +1,4 @@
+using System.Diagnostics;
 using Lua;
 
 namespace Pacmine.PackageCraft.LuaLibrary;
@@ -29,10 +30,19 @@ public class GlobalFunctions
             Print(context.GetArgument<string>(0));
             return new(context.Return());
         });
-
+        luaState.Environment["printerr"] = new LuaFunction((context, ct) =>
+        {
+            PrintError(context.GetArgument<string>(0));
+            return new(context.Return());
+        });
         luaState.Environment["git"] = new LuaFunction((context, ct) =>
         {
             int ret = GitCall(context.GetArgument<string>(0));
+            return new(context.Return(ret));
+        });
+        luaState.Environment["shell"] = new LuaFunction((context, ct) =>
+        {
+            int ret = ShellExecute(context.GetArgument<string>(0));
             return new(context.Return(ret));
         });
     }
@@ -43,7 +53,16 @@ public class GlobalFunctions
     /// <param name="message">The message string to print.</param>
     public void Print(string message)
     {
-        // TODO: Implement
+        builderContext.WriteStdout(message);
+    }
+
+    /// <summary>
+    /// Prints a message to the error stream.
+    /// </summary>
+    /// <param name="message">The message string to print.</param>
+    public void PrintError(string message)
+    {
+        builderContext.WriteStderr(message);
     }
 
     /// <summary>
@@ -58,8 +77,93 @@ public class GlobalFunctions
         {
             throw new Exception("Git is disabled");
         }
-        // TODO: Implement
 
-        return -1;
+        var psi = new ProcessStartInfo
+        {
+            FileName = builderContext.GitCommand,
+            Arguments = args,
+            WorkingDirectory = builderContext.SourceDirectory!.FullName,
+            RedirectStandardOutput = true,
+            RedirectStandardError = true,
+            UseShellExecute = false
+        };
+
+        using var process = new Process { StartInfo = psi };
+
+        process.OutputDataReceived += (sender, e) =>
+        {
+            if (e.Data != null)
+                builderContext.WriteStdout(e.Data + "\n");
+        };
+        process.ErrorDataReceived += (sender, e) =>
+        {
+            if (e.Data != null)
+                builderContext.WriteStderr(e.Data + "\n");
+        };
+
+        process.Start();
+        process.BeginOutputReadLine();
+        process.BeginErrorReadLine();
+        process.WaitForExit();
+
+        return process.ExitCode;
+    }
+
+    /// <summary>
+    /// Executes a shell command.
+    /// </summary>
+    /// <param name="command">The command to execute.</param>
+    /// <returns>The exit code returned by the shell process.</returns>
+    /// <exception cref="Exception">Thrown when shell execution is disabled(<see cref="PackageBuilder.AllowShellExceution"/> is <c>false</c>).</exception>
+    public int ShellExecute(string command)
+    {
+        if (builderContext.AllowShellExceution == false)
+        {
+            throw new Exception("Shell execution is disabled");
+        }
+
+        string shell;
+        string shellArgs;
+
+        if (OperatingSystem.IsWindows())
+        {
+            shell = Environment.GetEnvironmentVariable("ComSpec") ?? "cmd.exe";
+            shellArgs = "/c " + command;
+        }
+        else
+        {
+            shell = Environment.GetEnvironmentVariable("SHELL") ?? "/bin/sh";
+            shellArgs = "-c " + command;
+        }
+
+        var psi = new ProcessStartInfo
+        {
+            FileName = shell,
+            Arguments = shellArgs,
+            WorkingDirectory = builderContext.SourceDirectory!.FullName,
+            RedirectStandardOutput = true,
+            RedirectStandardError = true,
+            UseShellExecute = false
+        };
+
+        using var process = new Process { StartInfo = psi };
+
+        process.OutputDataReceived += (sender, e) =>
+        {
+            if (e.Data != null)
+                builderContext.WriteStdout(e.Data + "\n");
+        };
+        process.ErrorDataReceived += (sender, e) =>
+        {
+            if (e.Data != null)
+                builderContext.WriteStderr(e.Data + "\n");
+        };
+
+        process.Start();
+        process.BeginOutputReadLine();
+        process.BeginErrorReadLine();
+        process.WaitForExit();
+
+        return process.ExitCode;
     }
 }
