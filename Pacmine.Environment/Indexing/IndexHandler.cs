@@ -1,11 +1,11 @@
 namespace Pacmine.Environment.Indexing;
 
 /// <summary>
-/// Abstract base class for index handlers that manage the lifecycle of index data
-/// in a <see cref="PacmineEnvironment"/>.
+/// Non-generic base class for index handlers that manage the lifecycle of index data
+/// in a <see cref="PacmineEnvironment"/>. This class exists to allow heterogeneous collections
+/// of handlers (e.g., in <see cref="IndexManager"/>).
 /// </summary>
-/// <typeparam name="T">The type of content managed by this handler.</typeparam>
-public abstract class IndexHandler<T> where T : new()
+public abstract class IndexHandler
 {
     /// <summary>
     /// Gets the directory where index files are stored.
@@ -20,11 +20,6 @@ public abstract class IndexHandler<T> where T : new()
     {
         IndexDirectory = indexDirectory;
     }
-
-    /// <summary>
-    /// Gets or sets the typed content managed by this handler.
-    /// </summary>
-    public abstract T Content { get; set; }
 
     /// <summary>
     /// Called to load or deserialize index data from disk.
@@ -49,4 +44,43 @@ public abstract class IndexHandler<T> where T : new()
     /// </summary>
     /// <param name="registry">The registry entry that was removed.</param>
     public abstract void OnRemoveRegistry(PackageRegistry registry);
+
+    /// <summary>
+    /// Initializes the index by writing empty or default data to disk.
+    /// Called when a new environment is being created.
+    /// </summary>
+    public abstract void Initialize();
+}
+
+/// <summary>
+/// Abstract base class for index handlers that manage the lifecycle of typed index data
+/// in a <see cref="PacmineEnvironment"/>.
+/// </summary>
+/// <typeparam name="T">The type of content managed by this handler. Must have a parameterless constructor.</typeparam>
+public abstract class IndexHandler<T> : IndexHandler where T : new()
+{
+    /// <summary>
+    /// Initializes the handler with the specified index directory.
+    /// </summary>
+    /// <param name="indexDirectory">The directory where index files are stored.</param>
+    protected IndexHandler(DirectoryInfo indexDirectory) : base(indexDirectory)
+    {
+    }
+
+    /// <summary>
+    /// Gets or sets the typed content managed by this handler.
+    /// Setting this property persists the data to disk.
+    /// </summary>
+    public abstract T Content { get; set; }
+
+    /// <summary>
+    /// Initializes the index by writing a new default instance of <typeparamref name="T"/>
+    /// to disk. Since <typeparamref name="T"/> has a parameterless constructor and the
+    /// <see cref="Content"/> setter triggers serialization, this effectively writes
+    /// the empty/default representation of the content type to the index file.
+    /// </summary>
+    public override void Initialize()
+    {
+        Content = new T();
+    }
 }
