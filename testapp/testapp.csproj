@@ -1,0 +1,15 @@
+﻿<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <OutputType>Exe</OutputType>
+    <TargetFramework>net10.0</TargetFramework>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <Nullable>enable</Nullable>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\Pacmine.Core\Pacmine.Core.csproj" />
+    <ProjectReference Include="..\Pacmine.Environment\Pacmine.Environment.csproj" />
+  </ItemGroup>
+
+</Project>

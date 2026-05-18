@@ -25,4 +25,21 @@ public class VersionIdentifierJsonConverter : JsonConverter<VersionIdentifier>
     {
         writer.WriteStringValue(value.RawString);
     }
+
+    /// <summary>
+    /// Reads a <see cref="VersionIdentifier"/> from a JSON object property name (dictionary key).
+    /// </summary>
+    public override VersionIdentifier ReadAsPropertyName(ref Utf8JsonReader reader, Type typeToConvert, JsonSerializerOptions options)
+    {
+        var str = reader.GetString();
+        return new VersionIdentifier(str!);
+    }
+
+    /// <summary>
+    /// Writes a <see cref="VersionIdentifier"/> as a JSON object property name (dictionary key).
+    /// </summary>
+    public override void WriteAsPropertyName(Utf8JsonWriter writer, VersionIdentifier value, JsonSerializerOptions options)
+    {
+        writer.WritePropertyName(value.RawString);
+    }
 }

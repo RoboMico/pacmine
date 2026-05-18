@@ -169,6 +169,8 @@ public class PacmineEnvironment : IDisposable
     {
         if (!Directory.Exists(System.IO.Path.Combine(directory, SPECIAL_FOLDER_NAME)))
             throw new Exception("Invalid environment directory");
+        if (GetLockerPid(directory) >= 0)
+            throw new Exception("Environment is locked");
 
         PacmineEnvironment env = new(directory);
         env.Lock();
@@ -353,10 +355,12 @@ public class PacmineEnvironment : IDisposable
     public void WriteRegistry(PackageRegistry registry)
     {
         char initLetter = registry.Meta.Name[0];
+        DirectoryInfo layerDir = new(System.IO.Path.Combine(RegistryFolder.FullName, initLetter.ToString()));
+        if (!layerDir.Exists) layerDir.Create();
+
         File.WriteAllText(
             System.IO.Path.Combine(
-                RegistryFolder.FullName,
-                initLetter.ToString(),
+                layerDir.FullName,
                 $"{registry.Meta.Name}.json"),
             JsonSerializer.Serialize(registry));
 
