@@ -2,8 +2,10 @@ using System.Diagnostics;
 using System.IO.Compression;
 using System.Security.Cryptography;
 using System.Text;
+using System.Text.Json;
 using Downloader;
 using Lua;
+using Pacmine.Core;
 using Pacmine.PackageCraft.LuaLibrary;
 
 namespace Pacmine.PackageCraft;
@@ -500,6 +502,7 @@ public class PackageBuilder
         {
             throw new Exception("Package or Output directory is not configured");
         }
+        File.WriteAllText(Path.Combine(PackageDirectory.FullName, PackageParser.META_FILE_NAME), JsonSerializer.Serialize(Recipe.Meta));
         ZipFile.CreateFromDirectory(
             PackageDirectory.FullName,
             Path.Combine(OutputDirectory.FullName, $"{Recipe.Meta.Name}-{Recipe.Meta.GetFullVersionString()}.pacminepack.zip"));

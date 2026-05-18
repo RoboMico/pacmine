@@ -17,5 +17,5 @@ env.WriteRegistry(new PackageRegistry
     },
     FileList = [],
     InstallReason = InstallReasons.Explicit,
-    InstalledTime = DateTime.UtcNow
+    InstalledTime = DateTime.Now
 });
