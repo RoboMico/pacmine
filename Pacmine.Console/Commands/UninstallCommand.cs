@@ -6,15 +6,19 @@ internal static class UninstallCommand
 {
     public static Command Create()
     {
-        var pkgNameListArg = new Argument<string[]>("pkgNameList", "The package name(s) to uninstall");
-
-        var cmd = new Command("uninstall", "Uninstall a package")
+        var pkgNameListArg = new Argument<string[]>("pkgNameList")
         {
-            pkgNameListArg
+            Description = "The package name(s) to uninstall"
         };
-        cmd.AddAlias("remove");
 
-        cmd.SetHandler(ExecuteAsync, pkgNameListArg);
+        var cmd = new Command("uninstall", "Uninstall a package");
+        cmd.Aliases.Add("remove");
+        cmd.Add(pkgNameListArg);
+        cmd.SetAction(async (parseResult) =>
+        {
+            var pkgNames = parseResult.GetValue(pkgNameListArg);
+            await ExecuteAsync(pkgNames);
+        });
         return cmd;
     }
 

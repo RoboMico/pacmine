@@ -11,8 +11,8 @@
   </ItemGroup>
 
   <ItemGroup>
-    <PackageReference Include="Downloader" Version="5.2.0" />
-    <PackageReference Include="LuaCSharp" Version="0.5.3" />
+    <PackageReference Include="Downloader" Version="5.5.0" />
+    <PackageReference Include="LuaCSharp" Version="0.5.5" />
   </ItemGroup>
 
 </Project>

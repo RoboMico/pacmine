@@ -8,34 +8,52 @@ internal static class EnvCommand
     {
         var envCmd = new Command("env", "Manage environment packages");
 
+        var nameArg = new Argument<string>("name")
+        {
+            Description = "The name of the environment package"
+        };
+        var versionArg = new Argument<string>("version")
+        {
+            Description = "The version of the environment package"
+        };
         var setCmd = new Command("set", "Add an env package (if a new one) or change its version")
         {
-            new Argument<string>("name", "The name of the environment package"),
-            new Argument<string>("version", "The version of the environment package")
+            nameArg,
+            versionArg
         };
-        setCmd.SetHandler(ExecuteSetAsync,
-            setCmd.Arguments[0] as Argument<string> ?? throw new InvalidOperationException(),
-            setCmd.Arguments[1] as Argument<string> ?? throw new InvalidOperationException());
+        setCmd.SetAction(async (parseResult) =>
+        {
+            var name = parseResult.GetValue(nameArg);
+            var version = parseResult.GetValue(versionArg);
+            await ExecuteSetAsync(name, version);
+        });
 
+        var unsetNameArg = new Argument<string>("name")
+        {
+            Description = "The name of the environment package to remove"
+        };
         var unsetCmd = new Command("unset", "Remove an env package")
         {
-            new Argument<string>("name", "The name of the environment package to remove")
+            unsetNameArg
         };
-        unsetCmd.SetHandler(ExecuteUnsetAsync,
-            unsetCmd.Arguments[0] as Argument<string> ?? throw new InvalidOperationException());
+        unsetCmd.SetAction(async (parseResult) =>
+        {
+            var name = parseResult.GetValue(unsetNameArg);
+            await ExecuteUnsetAsync(name);
+        });
 
-        envCmd.AddCommand(setCmd);
-        envCmd.AddCommand(unsetCmd);
+        envCmd.Add(setCmd);
+        envCmd.Add(unsetCmd);
 
         return envCmd;
     }
 
-    private static async Task ExecuteSetAsync(string name, string version)
+    private static async Task ExecuteSetAsync(string? name, string? version)
     {
         throw new NotImplementedException();
     }
 
-    private static async Task ExecuteUnsetAsync(string name)
+    private static async Task ExecuteUnsetAsync(string? name)
     {
         throw new NotImplementedException();
     }
