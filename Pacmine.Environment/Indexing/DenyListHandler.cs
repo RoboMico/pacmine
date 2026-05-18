@@ -27,7 +27,6 @@ public class DenyListHandler : IndexHandler<Dictionary<string, Dictionary<string
 
     /// <summary>
     /// Gets or sets the deny list mapping and persists the data to disk on set.
-    /// <see cref="VersionRange"/> values are serialized as their string representation.
     /// </summary>
     public override Dictionary<string, Dictionary<string, VersionRange>> Content
     {
@@ -35,32 +34,21 @@ public class DenyListHandler : IndexHandler<Dictionary<string, Dictionary<string
         set
         {
             _content = value;
-            var serializable = _content.ToDictionary(
-                outer => outer.Key,
-                outer => outer.Value.ToDictionary(
-                    inner => inner.Key,
-                    inner => inner.Value.ToString()));
             File.WriteAllText(Path.Combine(IndexDirectory.FullName, FILE_NAME),
-                JsonSerializer.Serialize(serializable));
+                JsonSerializer.Serialize(_content));
         }
     }
 
     /// <summary>
-    /// Loads the deny list from the JSON file on disk. The stored JSON uses string representations
-    /// for <see cref="VersionRange"/> values, which are deserialized back into <see cref="VersionRange"/> instances.
+    /// Loads the deny list from the JSON file on disk.
     /// The <see cref="Content"/> is left empty if the file is unable to be read.
     /// </summary>
     public override void OnLoad()
     {
         try
         {
-            var rawDict = JsonSerializer.Deserialize<Dictionary<string, Dictionary<string, string>>>(
+            _content = JsonSerializer.Deserialize<Dictionary<string, Dictionary<string, VersionRange>>>(
                 File.ReadAllText(Path.Combine(IndexDirectory.FullName, FILE_NAME))) ?? [];
-            _content = rawDict.ToDictionary(
-                outer => outer.Key,
-                outer => outer.Value.ToDictionary(
-                    inner => inner.Key,
-                    inner => new VersionRange(inner.Value)));
         }
         catch
         {
@@ -88,13 +76,8 @@ public class DenyListHandler : IndexHandler<Dictionary<string, Dictionary<string
             }
         }
 
-        var serializeContent = (Dictionary<string, Dictionary<string, VersionRange>> d) =>
-            JsonSerializer.Serialize(d.ToDictionary(
-                outer => outer.Key,
-                outer => outer.Value.ToDictionary(inner => inner.Key, inner => inner.Value.ToString())));
-
-        var serializedCurrent = serializeContent(_content);
-        var serializedScanned = serializeContent(denyList);
+        var serializedCurrent = JsonSerializer.Serialize(_content);
+        var serializedScanned = JsonSerializer.Serialize(denyList);
         if (serializedCurrent != serializedScanned)
         {
             Content = denyList;

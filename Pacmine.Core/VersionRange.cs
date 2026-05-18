@@ -1,3 +1,4 @@
+using System.Text.Json.Serialization;
 using Semver;
 
 namespace Pacmine.Core;
@@ -8,6 +9,7 @@ namespace Pacmine.Core;
 /// exact match, wildcard <c>*</c>, <c>x</c>, hyphen ranges, and union <c>||</c>.
 /// Delegates to <see cref="SemVersionRange"/> (parsed via <see cref="SemVersionRange.TryParseNpm(string, bool, out SemVersionRange)"/>) internally.
 /// </summary>
+[JsonConverter(typeof(VersionRangeJsonConverter))]
 public class VersionRange
 {
     private readonly SemVersionRange _range;

@@ -36,7 +36,6 @@ public class VirtualPackagesHandler : IndexHandler<Dictionary<string, Dictionary
 
     /// <summary>
     /// Gets or sets the virtual package mapping and persists the data to disk on set.
-    /// <see cref="VersionIdentifier"/> keys are serialized via <see cref="VersionIdentifier.RawString"/>.
     /// </summary>
     public override Dictionary<string, Dictionary<VersionIdentifier, List<string>>> Content
     {
@@ -44,32 +43,21 @@ public class VirtualPackagesHandler : IndexHandler<Dictionary<string, Dictionary
         set
         {
             _content = value;
-            var serializable = _content.ToDictionary(
-                outer => outer.Key,
-                outer => outer.Value.ToDictionary(
-                    inner => inner.Key.RawString,
-                    inner => inner.Value));
             File.WriteAllText(Path.Combine(IndexDirectory.FullName, FILE_NAME),
-                JsonSerializer.Serialize(serializable));
+                JsonSerializer.Serialize(_content));
         }
     }
 
     /// <summary>
-    /// Loads the virtual packages from the JSON file on disk. The stored JSON uses <see cref="VersionIdentifier.RawString"/>
-    /// representations for version keys, which are deserialized back into <see cref="VersionIdentifier"/> instances.
+    /// Loads the virtual packages from the JSON file on disk.
     /// The <see cref="Content"/> is left empty if the file is unable to be read.
     /// </summary>
     public override void OnLoad()
     {
         try
         {
-            var rawDict = JsonSerializer.Deserialize<Dictionary<string, Dictionary<string, List<string>>>>(
+            _content = JsonSerializer.Deserialize<Dictionary<string, Dictionary<VersionIdentifier, List<string>>>>(
                 File.ReadAllText(Path.Combine(IndexDirectory.FullName, FILE_NAME))) ?? [];
-            _content = rawDict.ToDictionary(
-                outer => outer.Key,
-                outer => outer.Value.ToDictionary(
-                    inner => new VersionIdentifier(inner.Key),
-                    inner => inner.Value));
         }
         catch
         {
@@ -113,15 +101,8 @@ public class VirtualPackagesHandler : IndexHandler<Dictionary<string, Dictionary
             }
         }
 
-        var serializeContent = (Dictionary<string, Dictionary<VersionIdentifier, List<string>>> d) =>
-            JsonSerializer.Serialize(d.ToDictionary(
-                outer => outer.Key,
-                outer => outer.Value.ToDictionary(
-                    inner => inner.Key.RawString,
-                    inner => inner.Value)));
-
-        var serializedCurrent = serializeContent(_content);
-        var serializedScanned = serializeContent(virtualPkgs);
+        var serializedCurrent = JsonSerializer.Serialize(_content);
+        var serializedScanned = JsonSerializer.Serialize(virtualPkgs);
         if (serializedCurrent != serializedScanned)
         {
             Content = virtualPkgs;

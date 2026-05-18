@@ -1,3 +1,4 @@
+using System.Text.Json.Serialization;
 using Semver;
 
 namespace Pacmine.Core;
@@ -10,6 +11,7 @@ namespace Pacmine.Core;
 /// when both sides are valid <see cref="SemVersion"/>; otherwise falls back
 /// to ordinal <see cref="string.Compare(string, string, StringComparison)"/>.
 /// </summary>
+[JsonConverter(typeof(VersionIdentifierJsonConverter))]
 public class VersionIdentifier : IComparable<VersionIdentifier>, IEquatable<VersionIdentifier>
 {
     private static readonly SemVersionStyles ParseStyles =

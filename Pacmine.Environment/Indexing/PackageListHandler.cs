@@ -35,7 +35,7 @@ public class PackageListHandler : IndexHandler<Dictionary<string, VersionIdentif
         {
             _content = value;
             File.WriteAllText(Path.Combine(IndexDirectory.FullName, FILE_NAME),
-                JsonSerializer.Serialize(_content.ToDictionary(kvp => kvp.Key, kvp => kvp.Value.RawString)));
+                JsonSerializer.Serialize(_content));
         }
     }
 
@@ -47,9 +47,8 @@ public class PackageListHandler : IndexHandler<Dictionary<string, VersionIdentif
     {
         try
         {
-            var rawDict = JsonSerializer.Deserialize<Dictionary<string, string>>(
+            _content = JsonSerializer.Deserialize<Dictionary<string, VersionIdentifier>>(
                 File.ReadAllText(Path.Combine(IndexDirectory.FullName, FILE_NAME))) ?? [];
-            _content = rawDict.ToDictionary(kvp => kvp.Key, kvp => new VersionIdentifier(kvp.Value));
         }
         catch
         {
@@ -75,8 +74,8 @@ public class PackageListHandler : IndexHandler<Dictionary<string, VersionIdentif
         }
 
         // Only write if the current list is different from the scanned result
-        var serializedCurrent = JsonSerializer.Serialize(_content.ToDictionary(kvp => kvp.Key, kvp => kvp.Value.RawString));
-        var serializedScanned = JsonSerializer.Serialize(packageNames.ToDictionary(kvp => kvp.Key, kvp => kvp.Value.RawString));
+        var serializedCurrent = JsonSerializer.Serialize(_content);
+        var serializedScanned = JsonSerializer.Serialize(packageNames);
         if (serializedCurrent != serializedScanned)
         {
             Content = packageNames;
