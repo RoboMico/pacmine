@@ -173,9 +173,10 @@ public class PacmineEnvironment : IDisposable
         PacmineEnvironment env = new(directory);
         env.Lock();
 
-        // Set up IndexManager with the three standard handlers
+        // Set up IndexManager with the standard handlers
         env._indexManager = new IndexManager(env.RegistryFolder);
         env._indexManager.AddHandler(new PackageListHandler(env.IndexFolder));
+        env._indexManager.AddHandler(new VirtualPackagesHandler(env.IndexFolder));
         env._indexManager.AddHandler(new ManagedFileListHandler(env.IndexFolder));
         env._indexManager.AddHandler(new DenyListHandler(env.IndexFolder));
         env._indexManager.Load();
@@ -222,6 +223,7 @@ public class PacmineEnvironment : IDisposable
 
         var initIndex = new IndexManager(registryFolder);
         initIndex.AddHandler(new PackageListHandler(indexFolder));
+        initIndex.AddHandler(new VirtualPackagesHandler(indexFolder));
         initIndex.AddHandler(new ManagedFileListHandler(indexFolder));
         initIndex.AddHandler(new DenyListHandler(indexFolder));
         initIndex.Initialize();
@@ -239,67 +241,103 @@ public class PacmineEnvironment : IDisposable
     public UnacceptReason[] CheckAcceptance(PackageMeta[] packages)
     {
         var reasons = new List<UnacceptReason>();
-
-        var packList = _indexManager.GetHandler<PackageListHandler>()?.Content;
-        var denyList = _indexManager.GetHandler<DenyListHandler>()?.Content;
+        var packList = _indexManager.GetHandler<PackageListHandler>()?.Content ?? [];
+        var denyList = _indexManager.GetHandler<DenyListHandler>()?.Content ?? [];
+        var virtualPkgs = _indexManager.GetHandler<VirtualPackagesHandler>()?.Content ?? [];
 
         foreach (var pkgMeta in packages)
         {
             // 1. Check DenyList: any installed package denies this package?
             //    DenyList is keyed by conflict source (installed package name),
             //    value maps denied package name → version range.
-            if (denyList != null)
+            foreach (var (conflictSource, deniedPackages) in denyList)
             {
-                foreach (var (conflictSource, deniedPackages) in denyList)
+                // Check the package's own name
+                if (deniedPackages.TryGetValue(pkgMeta.Name, out var range))
                 {
-                    // Check the package's own name
-                    if (deniedPackages.TryGetValue(pkgMeta.Name, out var range))
-                    {
-                        if (range.Contains(pkgMeta.Version))
-                            reasons.Add(new ConflictUnacceptReason(pkgMeta.Name, conflictSource, range));
-                    }
+                    if (range.Contains(pkgMeta.Version))
+                        reasons.Add(new ConflictUnacceptReason(pkgMeta.Name, conflictSource, range));
+                }
 
-                    // Check virtual packages this package provides
-                    foreach (var (virtualName, virtualVersion) in pkgMeta.Provides)
+                // Check virtual packages this package provides
+                foreach (var (virtualName, virtualVersion) in pkgMeta.Provides)
+                {
+                    if (deniedPackages.TryGetValue(virtualName, out var virtualRange))
                     {
-                        if (deniedPackages.TryGetValue(virtualName, out var virtualRange))
-                        {
-                            if (virtualRange.Contains(virtualVersion))
-                                reasons.Add(new ConflictUnacceptReason(pkgMeta.Name, conflictSource, virtualRange));
-                        }
+                        if (virtualRange.Contains(virtualVersion))
+                            reasons.Add(new ConflictUnacceptReason(pkgMeta.Name, conflictSource, virtualRange));
                     }
                 }
             }
 
             // 2. Check this package's own Conflicts against installed packages
             //    (the reverse direction — the incoming package denies an installed one)
-            if (packList != null)
+            //    Check both real packages and virtual packages.
+            foreach (var (conflictedPkg, conflictRange) in pkgMeta.Conflicts)
             {
-                foreach (var (conflictedPkg, conflictRange) in pkgMeta.Conflicts)
+                bool conflictFound = false;
+
+                // Check against real installed packages
+                if (packList!.TryGetValue(conflictedPkg, out var installedVersion))
                 {
-                    if (packList.TryGetValue(conflictedPkg, out var installedVersion))
+                    if (conflictRange.Contains(installedVersion))
+                        conflictFound = true;
+                }
+
+                // Check against virtual packages provided by installed packages
+                if (!conflictFound && virtualPkgs!.TryGetValue(conflictedPkg, out var virtualVersions))
+                {
+                    foreach (var version in virtualVersions.Keys)
                     {
-                        if (conflictRange.Contains(installedVersion))
-                            reasons.Add(new ConflictUnacceptReason(pkgMeta.Name, conflictedPkg, conflictRange));
+                        if (conflictRange.Contains(version))
+                        {
+                            conflictFound = true;
+                            break;
+                        }
                     }
                 }
 
-                // 3. Check missing or unsatisfied dependencies
-                foreach (var (depName, depRange) in pkgMeta.Depends)
+                if (conflictFound)
+                    reasons.Add(new ConflictUnacceptReason(pkgMeta.Name, conflictedPkg, conflictRange));
+            }
+
+            // 3. Check missing or unsatisfied dependencies.
+            //    A dependency can be satisfied by either a real installed package
+            //    or a virtual package provided by any installed package.
+            foreach (var (depName, depRange) in pkgMeta.Depends)
+            {
+                bool satisfied = false;
+
+                // Check against real installed packages
+                if (packList!.TryGetValue(depName, out var installedVersion))
                 {
-                    if (!packList.TryGetValue(depName, out var installedVersion) || !depRange.Contains(installedVersion))
+                    if (depRange.Contains(installedVersion))
+                        satisfied = true;
+                }
+
+                // Check against virtual packages provided by installed packages
+                if (!satisfied && virtualPkgs!.TryGetValue(depName, out var virtualVersions))
+                {
+                    foreach (var version in virtualVersions.Keys)
                     {
-                        reasons.Add(new MissingDependsUnacceptReason(pkgMeta.Name, depName, depRange));
+                        if (depRange.Contains(version))
+                        {
+                            satisfied = true;
+                            break;
+                        }
                     }
                 }
 
-                // 4. Check if this package replaces any already-installed package
-                foreach (var (replacedPkg, _) in pkgMeta.Replaces)
+                if (!satisfied)
+                    reasons.Add(new MissingDependsUnacceptReason(pkgMeta.Name, depName, depRange));
+            }
+
+            // 4. Check if this package replaces any already-installed package
+            foreach (var (replacedPkg, _) in pkgMeta.Replaces)
+            {
+                if (packList.ContainsKey(replacedPkg))
                 {
-                    if (packList.ContainsKey(replacedPkg))
-                    {
-                        reasons.Add(new PackageReplacedUnacceptReason(pkgMeta.Name, replacedPkg));
-                    }
+                    reasons.Add(new PackageReplacedUnacceptReason(pkgMeta.Name, replacedPkg));
                 }
             }
         }

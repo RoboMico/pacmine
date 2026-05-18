@@ -59,8 +59,8 @@ public class PackageListHandler : IndexHandler<Dictionary<string, VersionIdentif
 
     /// <summary>
     /// Rebuilds the package list from the provided registry records.
-    /// Includes virtual packages from <see cref="PackageMeta.Provides"/>.
     /// Only writes to disk if the scanned content differs from the current content.
+    /// Note: virtual packages are managed separately by <see cref="VirtualPackagesHandler"/>.
     /// </summary>
     /// <param name="registries">The array of all registry entries to process.</param>
     /// <returns><c>true</c> if the content was altered during the rebuild; otherwise, <c>false</c>.</returns>
@@ -71,14 +71,7 @@ public class PackageListHandler : IndexHandler<Dictionary<string, VersionIdentif
         var packageNames = new Dictionary<string, VersionIdentifier>();
         foreach (var registry in registries)
         {
-            // Add the package itself
             packageNames[registry.Meta.Name] = registry.Meta.Version;
-
-            // Add virtual packages this package provides
-            foreach (var (virtualName, virtualVersion) in registry.Meta.Provides)
-            {
-                packageNames[virtualName] = virtualVersion;
-            }
         }
 
         // Only write if the current list is different from the scanned result
@@ -94,41 +87,26 @@ public class PackageListHandler : IndexHandler<Dictionary<string, VersionIdentif
     }
 
     /// <summary>
-    /// Adds or updates the package entry and any virtual packages from
-    /// <see cref="PackageMeta.Provides"/> in the list when a registry entry is written.
+    /// Adds or updates the package entry in the list when a registry entry is written.
+    /// Note: virtual packages are managed separately by <see cref="VirtualPackagesHandler"/>.
     /// </summary>
     /// <param name="registry">The registry entry that was written.</param>
     public override void OnWriteRegistry(PackageRegistry registry)
     {
         var newContent = Content;
         newContent[registry.Meta.Name] = registry.Meta.Version;
-
-        // Add virtual packages this package provides
-        foreach (var (virtualName, virtualVersion) in registry.Meta.Provides)
-        {
-            newContent[virtualName] = virtualVersion;
-        }
-
         Content = newContent;
     }
 
     /// <summary>
-    /// Removes the package entry and any virtual packages from
-    /// <see cref="PackageMeta.Provides"/> from the list when a registry is removed.
-    /// If the package is not present in the list, this method does nothing.
+    /// Removes the package entry from the list when a registry is removed.
+    /// Note: virtual packages are managed separately by <see cref="VirtualPackagesHandler"/>.
     /// </summary>
     /// <param name="registry">The registry entry that was removed.</param>
     public override void OnRemoveRegistry(PackageRegistry registry)
     {
         var newContent = Content;
         newContent.Remove(registry.Meta.Name);
-
-        // Also remove any virtual packages that this package provides
-        foreach (var virtualName in registry.Meta.Provides.Keys)
-        {
-            newContent.Remove(virtualName);
-        }
-
         Content = newContent;
     }
 }
