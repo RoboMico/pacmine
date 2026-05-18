@@ -27,11 +27,11 @@ public abstract class IndexHandler
     public abstract void OnLoad();
 
     /// <summary>
-    /// Called to rebuild the index by scanning the specified registry directory.
+    /// Called to rebuild the index from the provided set of registry records.
     /// </summary>
-    /// <param name="registryDirectory">The directory containing registry entries to scan.</param>
+    /// <param name="registries">The array of all registry entries to process.</param>
     /// <returns><c>true</c> if the content was altered during the rebuild; otherwise, <c>false</c>.</returns>
-    public abstract bool OnRebuild(DirectoryInfo registryDirectory);
+    public abstract bool OnRebuild(PackageRegistry[] registries);
 
     /// <summary>
     /// Called when a registry entry is written, to update the index accordingly.

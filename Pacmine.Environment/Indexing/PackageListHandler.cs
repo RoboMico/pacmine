@@ -58,48 +58,27 @@ public class PackageListHandler : IndexHandler<Dictionary<string, VersionIdentif
     }
 
     /// <summary>
-    /// Rebuilds the package list by scanning all registry records in the specified directory.
-    /// Includes virtual packages from <see cref="PackageMeta.Provides"/>
+    /// Rebuilds the package list from the provided registry records.
+    /// Includes virtual packages from <see cref="PackageMeta.Provides"/>.
     /// Only writes to disk if the scanned content differs from the current content.
     /// </summary>
-    /// <param name="registryDirectory">The directory containing registry entries to scan.</param>
+    /// <param name="registries">The array of all registry entries to process.</param>
     /// <returns><c>true</c> if the content was altered during the rebuild; otherwise, <c>false</c>.</returns>
-    public override bool OnRebuild(DirectoryInfo registryDirectory)
+    public override bool OnRebuild(PackageRegistry[] registries)
     {
         bool altered = false;
 
         var packageNames = new Dictionary<string, VersionIdentifier>();
-        try
+        foreach (var registry in registries)
         {
-            foreach (var subDir in registryDirectory.EnumerateDirectories())
+            // Add the package itself
+            packageNames[registry.Meta.Name] = registry.Meta.Version;
+
+            // Add virtual packages this package provides
+            foreach (var (virtualName, virtualVersion) in registry.Meta.Provides)
             {
-                foreach (var file in subDir.EnumerateFiles("*.json"))
-                {
-                    try
-                    {
-                        var registry = JsonSerializer.Deserialize<PackageRegistry>(
-                            File.ReadAllText(file.FullName));
-                        if (registry == null) continue;
-
-                        // Add the package itself
-                        packageNames[registry.Meta.Name] = registry.Meta.Version;
-
-                        // Add virtual packages this package provides
-                        foreach (var (virtualName, virtualVersion) in registry.Meta.Provides)
-                        {
-                            packageNames[virtualName] = virtualVersion;
-                        }
-                    }
-                    catch
-                    {
-                        // skip corrupt registry entries
-                    }
-                }
+                packageNames[virtualName] = virtualVersion;
             }
-        }
-        catch
-        {
-            // best-effort scan
         }
 
         // Only write if the current list is different from the scanned result

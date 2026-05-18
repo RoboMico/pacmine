@@ -69,43 +69,23 @@ public class DenyListHandler : IndexHandler<Dictionary<string, Dictionary<string
     }
 
     /// <summary>
-    /// Rebuilds the deny list by scanning all registry records in the specified directory
-    /// for conflict declarations. Only writes to disk if the scanned content differs from the current content.
+    /// Rebuilds the deny list from the provided registry records, collecting
+    /// conflict declarations. Only writes to disk if the scanned content differs
+    /// from the current content.
     /// </summary>
-    /// <param name="registryDirectory">The directory containing registry entries to scan.</param>
+    /// <param name="registries">The array of all registry entries to process.</param>
     /// <returns><c>true</c> if the content was altered during the rebuild; otherwise, <c>false</c>.</returns>
-    public override bool OnRebuild(DirectoryInfo registryDirectory)
+    public override bool OnRebuild(PackageRegistry[] registries)
     {
         bool altered = false;
 
         var denyList = new Dictionary<string, Dictionary<string, VersionRange>>();
-        try
+        foreach (var registry in registries)
         {
-            foreach (var subDir in registryDirectory.EnumerateDirectories())
+            if (registry.Meta.Conflicts.Count > 0)
             {
-                foreach (var file in subDir.EnumerateFiles("*.json"))
-                {
-                    try
-                    {
-                        var registry = JsonSerializer.Deserialize<PackageRegistry>(
-                            File.ReadAllText(file.FullName));
-                        if (registry == null) continue;
-
-                        if (registry.Meta.Conflicts.Count > 0)
-                        {
-                            denyList[registry.Meta.Name] = new Dictionary<string, VersionRange>(registry.Meta.Conflicts);
-                        }
-                    }
-                    catch
-                    {
-                        // skip corrupt registry entries
-                    }
-                }
+                denyList[registry.Meta.Name] = new Dictionary<string, VersionRange>(registry.Meta.Conflicts);
             }
-        }
-        catch
-        {
-            // best-effort scan
         }
 
         var serializeContent = (Dictionary<string, Dictionary<string, VersionRange>> d) =>

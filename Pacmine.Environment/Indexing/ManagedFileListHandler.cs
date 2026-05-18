@@ -1,5 +1,4 @@
 using System.Text.Json;
-using Pacmine.Core;
 
 namespace Pacmine.Environment.Indexing;
 
@@ -64,43 +63,22 @@ public class ManagedFileListHandler : IndexHandler<Dictionary<string, ManagedFil
     }
 
     /// <summary>
-    /// Rebuilds the managed file list by scanning all registry records in the specified directory.
+    /// Rebuilds the managed file list from the provided registry records.
     /// Only writes to disk if the scanned content differs from the current content.
     /// </summary>
-    /// <param name="registryDirectory">The directory containing registry entries to scan.</param>
+    /// <param name="registries">The array of all registry entries to process.</param>
     /// <returns><c>true</c> if the content was altered during the rebuild; otherwise, <c>false</c>.</returns>
-    public override bool OnRebuild(DirectoryInfo registryDirectory)
+    public override bool OnRebuild(PackageRegistry[] registries)
     {
         bool altered = false;
 
         var mngFiles = new Dictionary<string, ManagedFileRecord>();
-        try
+        foreach (var registry in registries)
         {
-            foreach (var subDir in registryDirectory.EnumerateDirectories())
+            foreach (var kvp in registry.FileList)
             {
-                foreach (var file in subDir.EnumerateFiles("*.json"))
-                {
-                    try
-                    {
-                        var registry = JsonSerializer.Deserialize<PackageRegistry>(
-                            File.ReadAllText(file.FullName));
-                        if (registry == null) continue;
-
-                        foreach (var kvp in registry.FileList)
-                        {
-                            mngFiles[kvp.Key] = new ManagedFileRecord(registry.Meta.Name, kvp.Value);
-                        }
-                    }
-                    catch
-                    {
-                        // skip corrupt registry entries
-                    }
-                }
+                mngFiles[kvp.Key] = new ManagedFileRecord(registry.Meta.Name, kvp.Value);
             }
-        }
-        catch
-        {
-            // best-effort scan
         }
 
         var serializedCurrent = JsonSerializer.Serialize(_content);

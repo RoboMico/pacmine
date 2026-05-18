@@ -1,4 +1,4 @@
-using Pacmine.Environment;
+using System.Text.Json;
 
 namespace Pacmine.Environment.Indexing;
 
@@ -72,16 +72,46 @@ public class IndexManager
     }
 
     /// <summary>
-    /// Calls <see cref="IndexHandler.OnRebuild(DirectoryInfo)"/> on all registered handlers
-    /// using the registry directory bound at construction.
+    /// Scans the registry directory, loads all registry entries,
+    /// then passes the pre-loaded array to every registered handler's
+    /// <see cref="IndexHandler.OnRebuild(PackageRegistry[])"/> method.
     /// </summary>
     /// <returns><c>true</c> if any handler reported that its content was altered; otherwise, <c>false</c>.</returns>
     public bool Rebuild()
     {
+        // Scan registry directory once — all handlers share this single pass
+        var registries = new List<PackageRegistry>();
+        try
+        {
+            foreach (var subDir in _registryDirectory.EnumerateDirectories())
+            {
+                foreach (var file in subDir.EnumerateFiles("*.json"))
+                {
+                    try
+                    {
+                        var registry = JsonSerializer.Deserialize<PackageRegistry>(
+                            File.ReadAllText(file.FullName));
+                        if (registry != null)
+                            registries.Add(registry);
+                    }
+                    catch
+                    {
+                        // skip corrupt registry entries
+                    }
+                }
+            }
+        }
+        catch
+        {
+            // best-effort scan
+        }
+
+        var registryArray = registries.ToArray();
+
         bool altered = false;
         foreach (var handler in _handlers)
         {
-            altered |= handler.OnRebuild(_registryDirectory);
+            altered |= handler.OnRebuild(registryArray);
         }
         return altered;
     }
