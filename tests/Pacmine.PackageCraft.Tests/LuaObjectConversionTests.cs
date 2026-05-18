@@ -69,10 +69,6 @@ public class LuaObjectConversionTests
         var original = new PackageMetaLuaObject
         {
             Name = "with-deps",
-            Description = "Has dependencies",
-            UpstreamUrl = "https://example.com",
-            Category = "mod",
-            License = "MIT",
             Version = new VersionIdentifier("1.0.0"),
             Depends = new()
             {
@@ -95,10 +91,6 @@ public class LuaObjectConversionTests
         var original = new PackageMetaLuaObject
         {
             Name = "conflicting",
-            Description = "Has conflicts",
-            UpstreamUrl = "https://example.com",
-            Category = "mod",
-            License = "MIT",
             Version = new VersionIdentifier("1.0.0"),
             Conflicts = new()
             {
@@ -124,10 +116,6 @@ public class LuaObjectConversionTests
             Meta = new PackageMetaLuaObject
             {
                 Name = "recipe-pkg",
-                Description = "Recipe test",
-                UpstreamUrl = "https://example.com",
-                Category = "mod",
-                License = "MIT",
                 Version = new VersionIdentifier("1.0.0")
             },
             Sources = ["src1.tar.gz", "src2.patch"],
@@ -150,12 +138,7 @@ public class LuaObjectConversionTests
             Meta = new PackageMetaLuaObject
             {
                 Name = "test-recipe",
-                Description = "Test",
-                UpstreamUrl = "https://example.com",
-                Category = "resourcepack",
-                License = "MIT",
-                Version = new VersionIdentifier("3.0.0"),
-                Release = 1
+                Version = new VersionIdentifier("3.0.0")
             },
             Sources = ["source.zip"],
             SourceChecksums = ["sha256:def456"],
@@ -181,10 +164,6 @@ public class LuaObjectConversionTests
             Meta = new PackageMetaLuaObject
             {
                 Name = "no-funcs",
-                Description = "No Lua functions",
-                UpstreamUrl = "https://example.com",
-                Category = "mod",
-                License = "MIT",
                 Version = new VersionIdentifier("1.0.0")
             }
         };

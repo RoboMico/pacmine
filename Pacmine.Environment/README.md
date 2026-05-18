@@ -56,14 +56,12 @@ env.WriteRegistry(new PackageRegistry
     Meta = new PackageMeta
     {
         Name = "minecraft",
-        Description = "environment package minecraft",
-        UpstreamUrl = "N/A",
-        Category = "env",
-        License = "N/A",
         Version = new VersionIdentifier("26.1.2")
+        Description = "environment package minecraft",
+        Category = "env",
     },
     FileList = [],
-    InstallReason = InstallReasons.Explicit,
+    InstallReason = InstallReasons.Environment,
     InstalledTime = DateTime.UtcNow
 });
 ```

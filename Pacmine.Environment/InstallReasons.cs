@@ -13,5 +13,10 @@ public enum InstallReasons
     /// <summary>
     /// The package was installed as a dependency of another package.
     /// </summary>
-    AsDependency
+    AsDependency,
+
+    /// <summary>
+    /// The package is an environment package.
+    /// </summary>
+    Environment
 }

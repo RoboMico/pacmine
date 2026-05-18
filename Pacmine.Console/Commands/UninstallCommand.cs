@@ -22,7 +22,7 @@ internal static class UninstallCommand
         return cmd;
     }
 
-    private static async Task ExecuteAsync(string[] pkgNameList)
+    private static async Task ExecuteAsync(string[]? pkgNameList)
     {
         throw new NotImplementedException();
     }

@@ -296,10 +296,6 @@ public class PacmineEnvironmentTests : IDisposable
         return new PackageMeta
         {
             Name = name,
-            Description = $"Test package {name}",
-            UpstreamUrl = "https://example.com",
-            Category = "mod",
-            License = "MIT",
             Version = new VersionIdentifier(version),
             Depends = depends ?? [],
             Conflicts = conflicts ?? [],

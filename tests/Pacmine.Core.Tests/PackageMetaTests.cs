@@ -46,10 +46,6 @@ public class PackageMetaTests
         Assert.Throws<ArgumentException>(() => new PackageMeta
         {
             Name = "Invalid-Name", // uppercase I
-            Description = "test",
-            UpstreamUrl = "https://example.com",
-            Category = "mod",
-            License = "MIT",
             Version = new VersionIdentifier("1.0.0")
         });
     }
@@ -60,10 +56,6 @@ public class PackageMetaTests
         var meta = new PackageMeta
         {
             Name = "valid-name",
-            Description = "test",
-            UpstreamUrl = "https://example.com",
-            Category = "mod",
-            License = "MIT",
             Version = new VersionIdentifier("1.0.0")
         };
         Assert.Equal("valid-name", meta.Name);
@@ -219,10 +211,6 @@ public class PackageMetaTests
         return new PackageMeta
         {
             Name = name,
-            Description = $"Test package {name}",
-            UpstreamUrl = "https://example.com",
-            Category = "mod",
-            License = "MIT",
             Version = new VersionIdentifier(version),
             Release = release,
             Epoch = epoch,

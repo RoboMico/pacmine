@@ -36,29 +36,29 @@ public partial class PackageMeta
     }
 
     /// <summary>
+    /// Gets or sets the version identifier for the package.
+    /// </summary>
+    public required VersionIdentifier Version { get; set; }
+
+    /// <summary>
     /// Gets or sets the description of the package.
     /// </summary>
-    public required string Description { get; set; }
+    public string Description { get; set; } = "No description";
 
     /// <summary>
     /// Gets or sets the upstream URL of the package, typically the project homepage or repository.
     /// </summary>
-    public required string UpstreamUrl { get; set; }
+    public string UpstreamUrl { get; set; } = "N/A";
 
     /// <summary>
     /// Gets or sets the category of the package (mod, resourcepack, shaderpack, etc).
     /// </summary>
-    public required string Category { get; set; }
+    public string Category { get; set; } = "";
 
     /// <summary>
     /// Gets or sets the license identifier for the package.
     /// </summary>
-    public required string License { get; set; }
-
-    /// <summary>
-    /// Gets or sets the version identifier for the package.
-    /// </summary>
-    public required VersionIdentifier Version { get; set; }
+    public string License { get; set; } = "N/A";
 
     /// <summary>
     /// Gets or sets the release number of the package. Defaults to 1.

@@ -45,10 +45,6 @@ public abstract class IndexHandlerTestBase : IDisposable
             Meta = new Core.PackageMeta
             {
                 Name = name,
-                Description = $"Test package {name}",
-                UpstreamUrl = "https://example.com",
-                Category = "mod",
-                License = "MIT",
                 Version = new Core.VersionIdentifier(version),
                 Depends = depends ?? [],
                 Conflicts = conflicts ?? [],

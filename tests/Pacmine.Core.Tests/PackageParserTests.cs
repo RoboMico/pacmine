@@ -30,10 +30,7 @@ public class PackageParserTests : IDisposable
         string zipPath = CreateZipWithMeta(new PackageMeta
         {
             Name = "test-package",
-            Description = "A test package",
-            UpstreamUrl = "https://example.com",
-            Category = "mod",
-            License = "MIT",
+            Description = "A test package", // assertation subject
             Version = new VersionIdentifier("1.2.3")
         });
 
@@ -97,10 +94,6 @@ public class PackageParserTests : IDisposable
         string zipPath = CreateZipWithMeta(new PackageMeta
         {
             Name = "test-pkg",
-            Description = "test",
-            UpstreamUrl = "https://example.com",
-            Category = "mod",
-            License = "MIT",
             Version = new VersionIdentifier("1.0.0")
         });
 
