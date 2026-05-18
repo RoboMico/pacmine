@@ -179,6 +179,7 @@ public class PacmineEnvironment : IDisposable
         env._indexManager = new IndexManager(env.RegistryFolder);
         env._indexManager.AddHandler(new PackageListHandler(env.IndexFolder));
         env._indexManager.AddHandler(new VirtualPackagesHandler(env.IndexFolder));
+        env._indexManager.AddHandler(new DependsOnHandler(env.IndexFolder));
         env._indexManager.AddHandler(new ManagedFileListHandler(env.IndexFolder));
         env._indexManager.AddHandler(new DenyListHandler(env.IndexFolder));
         env._indexManager.Load();
@@ -226,6 +227,7 @@ public class PacmineEnvironment : IDisposable
         var initIndex = new IndexManager(registryFolder);
         initIndex.AddHandler(new PackageListHandler(indexFolder));
         initIndex.AddHandler(new VirtualPackagesHandler(indexFolder));
+        initIndex.AddHandler(new DependsOnHandler(indexFolder));
         initIndex.AddHandler(new ManagedFileListHandler(indexFolder));
         initIndex.AddHandler(new DenyListHandler(indexFolder));
         initIndex.Initialize();
@@ -340,6 +342,88 @@ public class PacmineEnvironment : IDisposable
                 if (packList.ContainsKey(replacedPkg))
                 {
                     reasons.Add(new PackageReplacedUnacceptReason(pkgMeta.Name, replacedPkg));
+                }
+            }
+        }
+
+        return reasons.ToArray();
+    }
+
+    /// <summary>
+    /// Determines whether the specified set of packages can be safely uninstalled.
+    /// Checks for non-existent packages, reverse dependencies (real and virtual),
+    /// and version-aware virtual package dependency satisfaction.
+    /// </summary>
+    /// <param name="packages">The array of package names to check for uninstall.</param>
+    /// <returns>An array of <see cref="UninstallDenyReason"/> indicating why each package cannot be uninstalled.
+    /// An empty array indicates that the operation is safe.</returns>
+    public UninstallDenyReason[] CheckCanUninstall(string[] packages)
+    {
+        var reasons = new List<UninstallDenyReason>();
+        var uninstallSet = packages.ToHashSet();
+
+        var packList = _indexManager.GetHandler<PackageListHandler>()?.Content ?? [];
+        var dependsOn = _indexManager.GetHandler<DependsOnHandler>()?.Content ?? [];
+        var virtualPkgs = _indexManager.GetHandler<VirtualPackagesHandler>()?.Content;
+
+        foreach (var pkgName in packages)
+        {
+            // 1. Existence check
+            if (!packList.ContainsKey(pkgName))
+            {
+                reasons.Add(new NotExistDenyReason(pkgName));
+                continue;
+            }
+
+            // 2. Check real-name reverse dependencies (version-agnostic — a real package name is unique)
+            if (dependsOn.TryGetValue(pkgName, out var dependents))
+            {
+                foreach (var depender in dependents)
+                {
+                    if (!uninstallSet.Contains(depender))
+                    {
+                        reasons.Add(new BreakDependDenyReason(pkgName, depender));
+                    }
+                }
+            }
+
+            // 3. Check virtual package reverse dependencies (version-aware)
+            //    Single registry file read is acceptable (not a full scan)
+            var registry = GetRegistry(pkgName);
+            if (registry == null) continue;
+
+            foreach (var (virtualName, providedVersion) in registry.Meta.Provides)
+            {
+                if (!dependsOn.TryGetValue(virtualName, out var virtualDeps))
+                    continue;
+
+                foreach (var depender in virtualDeps)
+                {
+                    if (uninstallSet.Contains(depender))
+                        continue;
+
+                    // Read the dependent's registry to verify their exact version requirement.
+                    var dependerRegistry = GetRegistry(depender);
+                    if (dependerRegistry == null) continue;
+
+                    // Does this dependent actually require the version being removed?
+                    if (!dependerRegistry.Meta.Depends.TryGetValue(virtualName, out var requiredRange))
+                        continue;
+
+                    if (!requiredRange.Contains(providedVersion))
+                        continue;  // dependent needs a different version — not affected
+
+                    // Check if another provider (of any version) satisfies the dependent's requirement
+                    bool otherProviderExists = virtualPkgs != null
+                        && virtualPkgs.TryGetValue(virtualName, out var versionDict)
+                        && versionDict.Any(kvp =>
+                            requiredRange.Contains(kvp.Key)
+                            && kvp.Value.Any(p => !uninstallSet.Contains(p)));
+
+                    if (!otherProviderExists)
+                    {
+                        reasons.Add(new BreakDependDenyReason(pkgName, depender));
+                    }
                 }
             }
         }
