@@ -12,13 +12,25 @@ namespace Pacmine.PackageCraft;
 /// Disabled functions are never registered into the Lua state, and the correct
 /// variant of <see cref="AbstractFilesysLuaLibrary"/> is selected before the builder is created.</para>
 /// </summary>
-public class PackageBuilderFactory
+public class PackageBuilderFactory : IDisposable
 {
     private static readonly DownloadConfiguration _defaultDlConfig = new()
     {
         ChunkCount = 8,
         ParallelDownload = true
     };
+
+    /// <summary>
+    /// Shared Lua state that is created by <see cref="LoadRecipeAsync"/> and consumed by
+    /// <see cref="CreateBuilder"/>. This ensures the <see cref="LuaFunction"/> references
+    /// extracted during recipe loading are bound to the same Lua state used during the build.
+    /// </summary>
+    private LuaState? _sharedLuaState;
+
+    /// <summary>
+    /// Recipe produced by <see cref="LoadRecipeAsync"/>.
+    /// </summary>
+    public PackageCraftRecipe? Recipe { get; private set; }
 
     // ── Configuration properties ─────────────────────────────────────────
 
@@ -204,9 +216,15 @@ public class PackageBuilderFactory
     /// <returns>A task representing the asynchronous operation, returning the parsed recipe.</returns>
     public async Task<PackageCraftRecipe> LoadRecipeAsync(string script)
     {
-        using var tempState = LuaState.Create();
-        var result = (await tempState.DoStringAsync(script)).First().Read<LuaTable>();
-        return PackageCraftRecipeLuaObject.FromLuaTable(result);
+        // Dispose any previously cached state before creating a new one (e.g. on re-use)
+        _sharedLuaState?.Dispose();
+        // Create the shared Lua state — this same state will be transferred to the builder
+        // via CreateBuilder, so that LuaFunction references extracted from the recipe
+        // remain valid throughout the build pipeline.
+        _sharedLuaState = LuaState.Create();
+        var result = (await _sharedLuaState.DoStringAsync(script)).First().Read<LuaTable>();
+        Recipe = PackageCraftRecipeLuaObject.FromLuaTable(result);
+        return Recipe;
     }
 
     // ── Builder creation ─────────────────────────────────────────────────
@@ -215,18 +233,26 @@ public class PackageBuilderFactory
     /// Creates a fully-configured <see cref="PackageBuilder"/> with Lua libraries injected
     /// according to the factory's current permission settings.
     /// </summary>
-    /// <param name="recipe">The recipe to build with.</param>
     /// <returns>A configured <see cref="PackageBuilder"/> instance.</returns>
-    /// <exception cref="InvalidOperationException">Thrown when source or package directories are not configured.</exception>
-    public PackageBuilder CreateBuilder(PackageCraftRecipe recipe)
+    /// <exception cref="InvalidOperationException">Thrown when source or package directories are not configured,
+    /// or when no recipe has been loaded/provided.</exception>
+    public PackageBuilder CreateBuilder()
     {
         if (SourceDirectory == null)
             throw new InvalidOperationException("SourceDirectory is not configured. Call ConfigureWorkingDirectory or ConfigureSourceDirectory first.");
         if (PackageDirectory == null)
             throw new InvalidOperationException("PackageDirectory is not configured. Call ConfigureWorkingDirectory or ConfigurePackageDirectory first.");
+        if (Recipe == null)
+            throw new InvalidOperationException("No recipe has been loaded. Call LoadRecipeAsync or ConfigureRecipe first.");
 
-        // 1. Create a fresh Lua state
-        var luaState = LuaState.Create();
+        var recipe = Recipe;
+        Recipe = null; // consume the recipe
+
+        // 1. Use the shared Lua state from LoadRecipeAsync if available, otherwise create a fresh one.
+        //    The shared state ensures LuaFunction references extracted during recipe loading
+        //    belong to the same state that will be used throughout the build pipeline.
+        var luaState = _sharedLuaState ?? LuaState.Create();
+        _sharedLuaState = null; // ownership transferred to the builder
 
         // 2. Register global functions (only enabled ones)
         var globalFunctions = new GlobalFunctions(
@@ -262,5 +288,16 @@ public class PackageBuilderFactory
         globalFunctions.SetBuilderContext(builder);
 
         return builder;
+    }
+
+    // ── Resource cleanup ──────────────────────────────────────────────────
+
+    /// <summary>
+    /// Releases the shared Lua state if it was not consumed by <see cref="CreateBuilder"/>.
+    /// </summary>
+    public void Dispose()
+    {
+        _sharedLuaState?.Dispose();
+        _sharedLuaState = null;
     }
 }

@@ -100,7 +100,7 @@ internal static class BuildCommand
         var recipe = await factory.LoadRecipeAsync(script);
 
         // 5. Create builder
-        var builder = factory.CreateBuilder(recipe);
+        var builder = factory.CreateBuilder();
 
         // 6. Execute the pipeline
         try

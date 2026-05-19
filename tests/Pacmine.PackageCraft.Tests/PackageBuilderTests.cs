@@ -90,13 +90,14 @@ public class PackageBuilderTests
     {
         var factory = new PackageBuilderFactory();
         factory.ConfigurePackageDirectory("/tmp/pkg");
+        SetFactoryRecipe(factory, new PackageCraftRecipe
+        {
+            Protocol = "1.0",
+            Meta = new() { Name = "test", Version = new("1.0.0") }
+        });
 
         var ex = Assert.Throws<InvalidOperationException>(() =>
-            factory.CreateBuilder(new PackageCraftRecipe
-            {
-                Protocol = "1.0",
-                Meta = new() { Name = "test", Version = new("1.0.0") }
-            }));
+            factory.CreateBuilder());
 
         Assert.Contains("SourceDirectory", ex.Message);
     }
@@ -106,13 +107,14 @@ public class PackageBuilderTests
     {
         var factory = new PackageBuilderFactory();
         factory.ConfigureSourceDirectory("/tmp/src");
+        SetFactoryRecipe(factory, new PackageCraftRecipe
+        {
+            Protocol = "1.0",
+            Meta = new() { Name = "test", Version = new("1.0.0") }
+        });
 
         var ex = Assert.Throws<InvalidOperationException>(() =>
-            factory.CreateBuilder(new PackageCraftRecipe
-            {
-                Protocol = "1.0",
-                Meta = new() { Name = "test", Version = new("1.0.0") }
-            }));
+            factory.CreateBuilder());
 
         Assert.Contains("PackageDirectory", ex.Message);
     }
@@ -253,7 +255,8 @@ public class PackageBuilderTests
             Meta = new() { Name = "no-filesys", Version = new("1.0.0") }
         };
 
-        var builder = factory.CreateBuilder(recipe);
+        SetFactoryRecipe(factory, recipe);
+        var builder = factory.CreateBuilder();
 
         // The Lua state should not have "filesys" registered
         var luaStateField = typeof(PackageBuilder).GetField("luaState",
@@ -355,5 +358,17 @@ public class PackageBuilderTests
         var method = typeof(PackageBuilder).GetMethod("WriteStderr",
             System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Instance);
         method!.Invoke(builder, [message]);
+    }
+
+    /// <summary>
+    /// Sets the internal <c>_recipe</c> field on a <see cref="PackageBuilderFactory"/>
+    /// via reflection. Used by tests that need to provide a recipe without going through
+    /// <see cref="PackageBuilderFactory.LoadRecipeAsync"/>.
+    /// </summary>
+    private static void SetFactoryRecipe(PackageBuilderFactory factory, PackageCraftRecipe recipe)
+    {
+        var field = typeof(PackageBuilderFactory).GetField("_recipe",
+            System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Instance);
+        field!.SetValue(factory, recipe);
     }
 }
