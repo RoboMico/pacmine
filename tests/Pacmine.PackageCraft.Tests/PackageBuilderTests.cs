@@ -20,7 +20,6 @@ public class PackageBuilderTests
         var factory = new PackageBuilderFactory();
 
         Assert.True(factory.AllowFilesysLib);
-        Assert.True(factory.AllowOsLib);
         Assert.False(factory.AllowArbitraryFileOperation);
         Assert.False(factory.AllowShellExecution);
         Assert.Null(factory.GitCommand);
@@ -367,7 +366,8 @@ public class PackageBuilderTests
     /// </summary>
     private static void SetFactoryRecipe(PackageBuilderFactory factory, PackageCraftRecipe recipe)
     {
-        var field = typeof(PackageBuilderFactory).GetField("_recipe",
+        // Recipe is now an auto-property; the compiler generates a backing field with this name.
+        var field = typeof(PackageBuilderFactory).GetField("<Recipe>k__BackingField",
             System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Instance);
         field!.SetValue(factory, recipe);
     }

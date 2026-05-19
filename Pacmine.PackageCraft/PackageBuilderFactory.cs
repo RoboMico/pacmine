@@ -63,12 +63,6 @@ public class PackageBuilderFactory : IDisposable
     public bool AllowFilesysLib { get; private set; } = true;
 
     /// <summary>
-    /// Gets whether the Lua OS library is available. Defaults to <c>true</c>.
-    /// Currently reserved for future use.
-    /// </summary>
-    public bool AllowOsLib { get; private set; } = true;
-
-    /// <summary>
     /// Gets whether arbitrary file system operations (outside source and package directories)
     /// are permitted. When <c>true</c>, an <see cref="UnsafeFilesysLuaLibrary"/> is injected;
     /// when <c>false</c> (default), a <see cref="RestrictedFilesysLuaLibrary"/> is used.
@@ -148,17 +142,6 @@ public class PackageBuilderFactory : IDisposable
     public PackageBuilderFactory ConfigureFilesysLib(bool allow)
     {
         AllowFilesysLib = allow;
-        return this;
-    }
-
-    /// <summary>
-    /// Configures whether the Lua OS library is available. Currently reserved for future use.
-    /// </summary>
-    /// <param name="allow"><c>true</c> to allow; otherwise, <c>false</c>.</param>
-    /// <returns>This factory instance for chaining.</returns>
-    public PackageBuilderFactory ConfigureOsLib(bool allow)
-    {
-        AllowOsLib = allow;
         return this;
     }
 
@@ -254,15 +237,7 @@ public class PackageBuilderFactory : IDisposable
         var luaState = _sharedLuaState ?? LuaState.Create();
         _sharedLuaState = null; // ownership transferred to the builder
 
-        // 2. Register global functions (only enabled ones)
-        var globalFunctions = new GlobalFunctions(
-            // A temporary reference; the builder will be set properly after construction
-            null!,
-            GitCommand,
-            AllowShellExecution);
-        globalFunctions.RegisterFunctions(luaState);
-
-        // 3. Register filesys library (if enabled)
+        // 2. Register filesys library (if enabled) — this does not need a builder reference
         if (AllowFilesysLib)
         {
             if (AllowArbitraryFileOperation)
@@ -271,7 +246,7 @@ public class PackageBuilderFactory : IDisposable
                 luaState.Environment["filesys"] = new RestrictedFilesysLuaLibrary(SourceDirectory, PackageDirectory);
         }
 
-        // 4. Create the builder with the pre-configured Lua state
+        // 3. Create the builder with the partially-configured Lua state
         var builder = new PackageBuilder(
             luaState,
             recipe,
@@ -282,10 +257,15 @@ public class PackageBuilderFactory : IDisposable
             GitCommand,
             DownloadConfig);
 
-        // 5. Patch the GlobalFunctions with the actual builder reference (circular dependency)
-        //    Since GlobalFunctions only accesses builderContext for stdout/stderr/wd,
-        //    the reference is stable after construction.
-        globalFunctions.SetBuilderContext(builder);
+        // 4. Create GlobalFunctions with the actual builder reference (no more null!)
+        var globalFunctions = new GlobalFunctions(
+            builder,
+            GitCommand,
+            AllowShellExecution);
+
+        // 5. Register global functions on the builder's Lua state
+        //    The builder reference is already available, so any Lua invocation will work immediately.
+        builder.RegisterGlobalFunctions(globalFunctions);
 
         return builder;
     }

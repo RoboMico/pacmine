@@ -9,7 +9,7 @@ namespace Pacmine.PackageCraft.LuaLibrary;
 /// </summary>
 public class GlobalFunctions
 {
-    private PackageBuilder builderContext = null!;
+    private readonly PackageBuilder builderContext;
     private readonly string? gitCommand;
     private readonly bool allowShellExecution;
 
@@ -24,17 +24,6 @@ public class GlobalFunctions
         this.builderContext = builderContext;
         this.gitCommand = gitCommand;
         this.allowShellExecution = allowShellExecution;
-    }
-
-    /// <summary>
-    /// Sets the <see cref="PackageBuilder"/> context reference after construction.
-    /// This resolves the circular dependency: <c>GlobalFunctions</c> needs a <c>PackageBuilder</c>
-    /// reference for stdout/stderr and working directory, but the factory creates both.
-    /// </summary>
-    /// <param name="builder">The fully-constructed <see cref="PackageBuilder"/> instance.</param>
-    internal void SetBuilderContext(PackageBuilder builder)
-    {
-        builderContext = builder;
     }
 
     /// <summary>

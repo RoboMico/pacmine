@@ -161,11 +161,15 @@ public class VersionIdentifier : IComparable<VersionIdentifier>, IEquatable<Vers
     }
 
     /// <summary>
-    /// Returns the hash code for the current instance based on the raw string.
+    /// Returns the hash code for the current instance.
+    /// When the version is a valid SemVer, delegates to <see cref="SemVersion.GetHashCode"/>
+    /// so that semantically equivalent versions (e.g., "1.0.0" and "v1.0.0") produce the same hash,
+    /// consistent with <see cref="Equals(VersionIdentifier?)"/>.
+    /// Falls back to the raw string hash code for non-SemVer versions.
     /// </summary>
     public override int GetHashCode()
     {
-        return RawString.GetHashCode();
+        return _semver?.GetHashCode() ?? RawString.GetHashCode();
     }
 
     /// <summary>

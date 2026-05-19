@@ -99,21 +99,7 @@ public class PacmineEnvironment : IDisposable
 
     private int TryReadLockPid()
     {
-        try
-        {
-            using var fs = new FileStream(
-                LockFile.FullName,
-                FileMode.Open,
-                FileAccess.Read,
-                FileShare.ReadWrite);
-            using var reader = new StreamReader(fs, Encoding.UTF8);
-            var text = reader.ReadToEnd();
-            return int.TryParse(text.Trim(), out var pid) ? pid : -1;
-        }
-        catch
-        {
-            return -1;
-        }
+        return GetLockerPid(Path);
     }
 
     private void Unlock()
@@ -169,22 +155,26 @@ public class PacmineEnvironment : IDisposable
     {
         if (!Directory.Exists(System.IO.Path.Combine(directory, SPECIAL_FOLDER_NAME)))
             throw new Exception("Invalid environment directory");
-        if (GetLockerPid(directory) >= 0)
-            throw new Exception("Environment is locked");
 
         PacmineEnvironment env = new(directory);
         env.Lock();
-
-        // Set up IndexManager with the standard handlers
-        env._indexManager = new IndexManager(env.RegistryFolder);
-        env._indexManager.AddHandler(new PackageListHandler(env.IndexFolder));
-        env._indexManager.AddHandler(new VirtualPackagesHandler(env.IndexFolder));
-        env._indexManager.AddHandler(new DependsOnHandler(env.IndexFolder));
-        env._indexManager.AddHandler(new ManagedFileListHandler(env.IndexFolder));
-        env._indexManager.AddHandler(new DenyListHandler(env.IndexFolder));
+        env.RegisterDefaultHandlers();
         env._indexManager.Load();
 
         return env;
+    }
+
+    /// <summary>
+    /// Registers the standard set of index handlers into the <see cref="IndexManager"/>.
+    /// </summary>
+    private void RegisterDefaultHandlers()
+    {
+        _indexManager = new IndexManager(RegistryFolder);
+        _indexManager.AddHandler(new PackageListHandler(IndexFolder));
+        _indexManager.AddHandler(new VirtualPackagesHandler(IndexFolder));
+        _indexManager.AddHandler(new DependsOnHandler(IndexFolder));
+        _indexManager.AddHandler(new ManagedFileListHandler(IndexFolder));
+        _indexManager.AddHandler(new DenyListHandler(IndexFolder));
     }
 
     /// <summary>
@@ -213,17 +203,11 @@ public class PacmineEnvironment : IDisposable
         if (Directory.Exists(spFolderPath))
             throw new Exception("Environment already created");
 
-        Directory.CreateDirectory(spFolderPath);
+        // Create the directory tree
+        var registryFolder = Directory.CreateDirectory(System.IO.Path.Combine(spFolderPath, REGISTRY_FOLDER_NAME));
+        var indexFolder = Directory.CreateDirectory(System.IO.Path.Combine(spFolderPath, INDEX_FOLDER_NAME));
 
-        // Initialize index files via IndexManager
-        var specialFolder = new DirectoryInfo(spFolderPath);
-        var registryFolder = new DirectoryInfo(System.IO.Path.Combine(spFolderPath, REGISTRY_FOLDER_NAME));
-        var indexFolder = new DirectoryInfo(System.IO.Path.Combine(spFolderPath, INDEX_FOLDER_NAME));
-
-        specialFolder.Create();
-        registryFolder.Create();
-        indexFolder.Create();
-
+        // Write initial index files before acquiring the full environment lock
         var initIndex = new IndexManager(registryFolder);
         initIndex.AddHandler(new PackageListHandler(indexFolder));
         initIndex.AddHandler(new VirtualPackagesHandler(indexFolder));
@@ -337,9 +321,11 @@ public class PacmineEnvironment : IDisposable
             }
 
             // 4. Check if this package replaces any already-installed package
-            foreach (var (replacedPkg, _) in pkgMeta.Replaces)
+            //    The version range determines which installed versions are affected.
+            foreach (var (replacedPkg, replaceRange) in pkgMeta.Replaces)
             {
-                if (packList.ContainsKey(replacedPkg))
+                if (packList.TryGetValue(replacedPkg, out var installedVersion)
+                    && replaceRange.Contains(installedVersion))
                 {
                     reasons.Add(new PackageReplacedUnacceptReason(pkgMeta.Name, replacedPkg));
                 }
@@ -366,6 +352,19 @@ public class PacmineEnvironment : IDisposable
         var dependsOn = _indexManager.GetHandler<DependsOnHandler>()?.Content ?? [];
         var virtualPkgs = _indexManager.GetHandler<VirtualPackagesHandler>()?.Content;
 
+        // Pre-load registries for any dependent packages referenced in dependsOn
+        // to avoid O(n*m) individual disk reads in the virtual-package check loop below.
+        var registryCache = new Dictionary<string, PackageRegistry?>(StringComparer.Ordinal);
+        PackageRegistry? GetCachedRegistry(string name)
+        {
+            if (!registryCache.TryGetValue(name, out var reg))
+            {
+                reg = GetRegistry(name);
+                registryCache[name] = reg;
+            }
+            return reg;
+        }
+
         foreach (var pkgName in packages)
         {
             // 1. Existence check
@@ -388,8 +387,7 @@ public class PacmineEnvironment : IDisposable
             }
 
             // 3. Check virtual package reverse dependencies (version-aware)
-            //    Single registry file read is acceptable (not a full scan)
-            var registry = GetRegistry(pkgName);
+            var registry = GetCachedRegistry(pkgName);
             if (registry == null) continue;
 
             foreach (var (virtualName, providedVersion) in registry.Meta.Provides)
@@ -402,8 +400,8 @@ public class PacmineEnvironment : IDisposable
                     if (uninstallSet.Contains(depender))
                         continue;
 
-                    // Read the dependent's registry to verify their exact version requirement.
-                    var dependerRegistry = GetRegistry(depender);
+                    // Read the dependent's registry (cached) to verify their exact version requirement.
+                    var dependerRegistry = GetCachedRegistry(depender);
                     if (dependerRegistry == null) continue;
 
                     // Does this dependent actually require the version being removed?

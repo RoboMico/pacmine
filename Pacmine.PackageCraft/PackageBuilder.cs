@@ -63,6 +63,16 @@ public class PackageBuilder
     }
 
     /// <summary>
+    /// Registers global Lua functions (print, printerr, git, shell) on the builder's internal Lua state.
+    /// Must be called before any build pipeline methods are invoked.
+    /// </summary>
+    /// <param name="globalFunctions">The <see cref="GlobalFunctions"/> instance to register.</param>
+    internal void RegisterGlobalFunctions(GlobalFunctions globalFunctions)
+    {
+        globalFunctions.RegisterFunctions(luaState);
+    }
+
+    /// <summary>
     /// Gets the working directory for the build.
     /// </summary>
     public DirectoryInfo? WorkingDirectory { get; }
