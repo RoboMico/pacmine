@@ -165,6 +165,75 @@ public class FilesysLuaLibraryTests
         Assert.True(File.Exists(dest));
     }
 
+    [Fact]
+    public void Restricted_AssertsPath_PrefixTraversal_Throws()
+    {
+        using var srcDir = new TempDirectory();
+        using var pkgDir = new TempDirectory();
+        var restricted = new RestrictedFilesysLuaLibrary(srcDir.DirInfo, pkgDir.DirInfo);
+
+        // If srcDir is /tmp/abc, a path under /tmp/abc-other should NOT be allowed
+        var prefixTraversalDir = new TempDirectory();
+        var traversalPath = prefixTraversalDir.Path + "-evil";
+        Directory.CreateDirectory(traversalPath);
+        var fileInTraversalPath = Path.Combine(traversalPath, "file.txt");
+        File.WriteAllText(fileInTraversalPath, "content");
+
+        Assert.Throws<UnauthorizedAccessException>(() => restricted.Delete(fileInTraversalPath));
+    }
+
+    [Fact]
+    public void Restricted_AssertsPath_EqualsDirectoryItself_Throws()
+    {
+        using var srcDir = new TempDirectory();
+        using var pkgDir = new TempDirectory();
+        var restricted = new RestrictedFilesysLuaLibrary(srcDir.DirInfo, pkgDir.DirInfo);
+
+        // Deleting the source directory itself is not a child operation
+        Assert.Throws<UnauthorizedAccessException>(() => restricted.Delete(srcDir.Path));
+    }
+
+    [Fact]
+    public void Restricted_Mkdir_CreatesSubdirectoryInsideAllowedDir_Succeeds()
+    {
+        using var srcDir = new TempDirectory();
+        using var pkgDir = new TempDirectory();
+        var restricted = new RestrictedFilesysLuaLibrary(srcDir.DirInfo, pkgDir.DirInfo);
+
+        var subDir = Path.Combine(srcDir.Path, "nested", "deep", "dir");
+
+        restricted.CreateDirectory(subDir);
+
+        Assert.True(Directory.Exists(subDir));
+    }
+
+    [Fact]
+    public void Restricted_Delete_NonExistentFile_DoesNotThrow()
+    {
+        using var srcDir = new TempDirectory();
+        using var pkgDir = new TempDirectory();
+        var restricted = new RestrictedFilesysLuaLibrary(srcDir.DirInfo, pkgDir.DirInfo);
+
+        var nonExistent = Path.Combine(srcDir.Path, "does_not_exist.txt");
+
+        // File.Delete does not throw if file doesn't exist
+        restricted.Delete(nonExistent);
+    }
+
+    [Fact]
+    public void Restricted_Copy_SourceEqualsDestination_ThrowsOrSucceeds()
+    {
+        using var srcDir = new TempDirectory();
+        using var pkgDir = new TempDirectory();
+        var restricted = new RestrictedFilesysLuaLibrary(srcDir.DirInfo, pkgDir.DirInfo);
+
+        var file = Path.Combine(srcDir.Path, "same.txt");
+        File.WriteAllText(file, "same");
+
+        // File.Copy with source==dest throws IOException on .NET
+        Assert.Throws<IOException>(() => restricted.Copy(file, file));
+    }
+
     // ── UnsafeFilesysLuaLibrary ──────────────────────────────────────────
 
     [Fact]

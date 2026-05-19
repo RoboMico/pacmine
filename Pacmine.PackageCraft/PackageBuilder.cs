@@ -159,6 +159,8 @@ public class PackageBuilder
                 fileName = e.FileName;
             };
             await dlService.DownloadFileTaskAsync(src, SourceDirectory.FullName);
+            if (string.IsNullOrEmpty(fileName))
+                throw new InvalidOperationException($"Download completed but no file name was reported for '{src}'.");
             trackedSources[index] = new FileInfo(Path.Combine(SourceDirectory.FullName, fileName));
         }
         else if (src.StartsWith("git://"))
@@ -203,39 +205,33 @@ public class PackageBuilder
 
             string clonePath = Path.Combine(SourceDirectory.FullName, repoName);
 
-            // Build arguments
-            var argsBuilder = new List<string>
-            {
-                "clone",
-                url,
-                clonePath,
-                "--depth",
-                "1"
-            };
-
-            if (branch != null)
-            {
-                argsBuilder.Add("--branch");
-                argsBuilder.Add(branch);
-            }
-
-            if (refSpec != null)
-            {
-                argsBuilder.Add("--revision");
-                argsBuilder.Add(refSpec);
-            }
-
-            string arguments = string.Join(" ", argsBuilder.Select(a => a.Contains(' ') ? $"\"{a}\"" : a));
-
+            // Build arguments using ArgumentList for proper escaping
             var psi = new ProcessStartInfo
             {
                 FileName = GitCommand,
-                Arguments = arguments,
                 WorkingDirectory = SourceDirectory.FullName,
                 RedirectStandardOutput = true,
                 RedirectStandardError = true,
                 UseShellExecute = false
             };
+
+            psi.ArgumentList.Add("clone");
+            psi.ArgumentList.Add(url);
+            psi.ArgumentList.Add(clonePath);
+            psi.ArgumentList.Add("--depth");
+            psi.ArgumentList.Add("1");
+
+            if (branch != null)
+            {
+                psi.ArgumentList.Add("--branch");
+                psi.ArgumentList.Add(branch);
+            }
+
+            if (refSpec != null)
+            {
+                psi.ArgumentList.Add("--revision");
+                psi.ArgumentList.Add(refSpec);
+            }
 
             using var process = new Process { StartInfo = psi };
             process.Start();
@@ -258,7 +254,7 @@ public class PackageBuilder
             }
             string srcFile = Path.Combine(WorkingDirectory.FullName, src);
             string destFile = Path.Combine(SourceDirectory.FullName, src);
-            File.Copy(srcFile, destFile);
+            File.Copy(srcFile, destFile, overwrite: true);
             trackedSources[index] = new FileInfo(destFile);
         }
     }
@@ -329,6 +325,8 @@ public class PackageBuilder
         if (Recipe.GetVersion == null)
             return false;
         var result = await luaState.CallAsync(Recipe.GetVersion, []);
+        if (result.Length == 0)
+            throw new InvalidOperationException("get_version must return a version string.");
         Recipe.Meta.Version = new(result[0].Read<string>());
         return true;
     }

@@ -10,9 +10,6 @@ namespace Pacmine.PackageCraft.LuaLibrary;
 [LuaObject]
 public partial class RestrictedFilesysLuaLibrary : AbstractFilesysLuaLibrary
 {
-    private readonly DirectoryInfo sourceDirectory;
-    private readonly DirectoryInfo packageDirectory;
-
     /// <summary>
     /// Initializes a new instance of the <see cref="RestrictedFilesysLuaLibrary"/> class.
     /// </summary>
@@ -21,14 +18,17 @@ public partial class RestrictedFilesysLuaLibrary : AbstractFilesysLuaLibrary
     public RestrictedFilesysLuaLibrary(DirectoryInfo sourceDirectory, DirectoryInfo packageDirectory)
         : base(sourceDirectory, packageDirectory)
     {
-        this.sourceDirectory = sourceDirectory;
-        this.packageDirectory = packageDirectory;
     }
 
     private void AssertPathAllowed(string resolvedPath)
     {
-        if (!resolvedPath.StartsWith(sourceDirectory.FullName, StringComparison.Ordinal) &&
-            !resolvedPath.StartsWith(packageDirectory.FullName, StringComparison.Ordinal))
+        var srcPrefix = sourceDirectory.FullName.TrimEnd(Path.DirectorySeparatorChar) + Path.DirectorySeparatorChar;
+        var pkgPrefix = packageDirectory.FullName.TrimEnd(Path.DirectorySeparatorChar) + Path.DirectorySeparatorChar;
+
+        if (!resolvedPath.StartsWith(srcPrefix, StringComparison.Ordinal) &&
+            !resolvedPath.StartsWith(pkgPrefix, StringComparison.Ordinal) &&
+            !resolvedPath.Equals(sourceDirectory.FullName, StringComparison.Ordinal) &&
+            !resolvedPath.Equals(packageDirectory.FullName, StringComparison.Ordinal))
         {
             throw new UnauthorizedAccessException(
                 $"File system operation denied: path '{resolvedPath}' is outside the allowed directories.");

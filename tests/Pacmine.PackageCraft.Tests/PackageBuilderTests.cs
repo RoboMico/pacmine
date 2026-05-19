@@ -171,6 +171,147 @@ public class PackageBuilderTests
         }
     }
 
+    [Fact]
+    public async Task Builder_CleanUpAsync_RemovesCreatedDirectories()
+    {
+        var tmpRoot = Path.Combine(Path.GetTempPath(), "PacmineTest", Guid.NewGuid().ToString());
+        var srcDir = Path.Combine(tmpRoot, "src");
+        var pkgDir = Path.Combine(tmpRoot, "pkg");
+
+        var recipe = new PackageCraftRecipe
+        {
+            Protocol = "1.0",
+            Meta = new() { Name = "cleanup-test", Version = new("1.0.0") }
+        };
+
+        var builder = CreateBuilderInstance(recipe,
+            workingDir: tmpRoot,
+            sourceDir: srcDir,
+            packageDir: pkgDir);
+
+        builder.InitializeDirectories();
+
+        Assert.True(Directory.Exists(srcDir));
+        Assert.True(Directory.Exists(pkgDir));
+
+        await builder.CleanUpAsync();
+
+        Assert.False(Directory.Exists(srcDir));
+        Assert.False(Directory.Exists(pkgDir));
+    }
+
+    [Fact]
+    public void Builder_StandardOutput_ReflectsWrittenMessages()
+    {
+        var recipe = new PackageCraftRecipe
+        {
+            Protocol = "1.0",
+            Meta = new() { Name = "stdout-test", Version = new("1.0.0") }
+        };
+
+        var builder = CreateBuilderInstance(recipe);
+
+        InvokeWriteStdout(builder, "hello");
+        InvokeWriteStdout(builder, " world");
+
+        var reader = builder.StandardOutput;
+        var text = reader.ReadToEnd();
+
+        Assert.Equal("hello world", text);
+    }
+
+    [Fact]
+    public void Builder_StandardError_ReflectsWrittenMessages()
+    {
+        var recipe = new PackageCraftRecipe
+        {
+            Protocol = "1.0",
+            Meta = new() { Name = "stderr-test", Version = new("1.0.0") }
+        };
+
+        var builder = CreateBuilderInstance(recipe);
+
+        InvokeWriteStderr(builder, "error message");
+
+        var reader = builder.StandardError;
+        var text = reader.ReadToEnd();
+
+        Assert.Equal("error message", text);
+    }
+
+    [Fact]
+    public void Factory_AllowFilesysLibDisabled_DoesNotRegisterFilesys()
+    {
+        var factory = new PackageBuilderFactory();
+        factory
+            .ConfigureWorkingDirectory("/tmp/disable-filesys")
+            .ConfigureFilesysLib(false);
+
+        var recipe = new PackageCraftRecipe
+        {
+            Protocol = "1.0",
+            Meta = new() { Name = "no-filesys", Version = new("1.0.0") }
+        };
+
+        var builder = factory.CreateBuilder(recipe);
+
+        // The Lua state should not have "filesys" registered
+        var luaStateField = typeof(PackageBuilder).GetField("luaState",
+            System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Instance);
+        var luaState = luaStateField!.GetValue(builder) as Lua.LuaState;
+
+        Assert.NotNull(luaState);
+        Assert.Equal(Lua.LuaValueType.Nil, luaState!.Environment["filesys"].Type);
+    }
+
+    // ── CompressPackageAsync meta file test ──────────────────────────────
+
+    [Fact]
+    public async Task Builder_CompressPackageAsync_WritesValidMetaJson()
+    {
+        var tmpRoot = Path.Combine(Path.GetTempPath(), "PacmineTest", Guid.NewGuid().ToString());
+        var srcDir = Path.Combine(tmpRoot, "src");
+        var pkgDir = Path.Combine(tmpRoot, "pkg");
+        var outDir = Path.Combine(tmpRoot, "out");
+        Directory.CreateDirectory(outDir);
+
+        var recipe = new PackageCraftRecipe
+        {
+            Protocol = "1.0",
+            Meta = new() { Name = "meta-test", Version = new("1.2.3") }
+        };
+
+        var builder = CreateBuilderInstance(recipe,
+            workingDir: tmpRoot,
+            sourceDir: srcDir,
+            packageDir: pkgDir,
+            outputDir: outDir);
+
+        try
+        {
+            builder.InitializeDirectories();
+            await builder.CompressPackageAsync();
+
+            // Verify the meta JSON was written to the package directory before zipping
+            var metaPath = Path.Combine(pkgDir, ".PACMINE.META.json");
+            Assert.True(File.Exists(metaPath));
+
+            var metaJson = File.ReadAllText(metaPath);
+            var deserialized = System.Text.Json.JsonSerializer.Deserialize<Pacmine.Core.PackageMeta>(metaJson);
+            Assert.NotNull(deserialized);
+            Assert.Equal("meta-test", deserialized!.Name);
+            Assert.Equal("1.2.3", deserialized.Version.RawString);
+
+            // Verify zip was created
+            var zipPath = Path.Combine(outDir, "meta-test-1.2.3-1.pacminepack.zip");
+            Assert.True(File.Exists(zipPath));
+        }
+        finally
+        {
+            try { Directory.Delete(tmpRoot, recursive: true); } catch { }
+        }
+    }
+
     // ── Helper ───────────────────────────────────────────────────────────
 
     private static PackageBuilder CreateBuilderInstance(
@@ -200,5 +341,19 @@ public class PackageBuilderTests
         ]);
 
         return builder;
+    }
+
+    private static void InvokeWriteStdout(PackageBuilder builder, string message)
+    {
+        var method = typeof(PackageBuilder).GetMethod("WriteStdout",
+            System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Instance);
+        method!.Invoke(builder, [message]);
+    }
+
+    private static void InvokeWriteStderr(PackageBuilder builder, string message)
+    {
+        var method = typeof(PackageBuilder).GetMethod("WriteStderr",
+            System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Instance);
+        method!.Invoke(builder, [message]);
     }
 }

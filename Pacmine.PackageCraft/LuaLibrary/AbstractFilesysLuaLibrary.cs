@@ -6,8 +6,8 @@ namespace Pacmine.PackageCraft.LuaLibrary;
 /// </summary>
 public abstract class AbstractFilesysLuaLibrary
 {
-    private readonly DirectoryInfo sourceDirectory;
-    private readonly DirectoryInfo packageDirectory;
+    protected readonly DirectoryInfo sourceDirectory;
+    protected readonly DirectoryInfo packageDirectory;
 
     /// <summary>
     /// Initializes a new instance of the <see cref="AbstractFilesysLuaLibrary"/> class.
