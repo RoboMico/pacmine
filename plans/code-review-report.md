@@ -616,7 +616,7 @@ The `help`, `version`, and `list` commands (read-only, no state mutation) have t
 | Fixed? | #       | File                      | Line(s)    | Issue                                                      | Severity |
 | ------ | ------- | ------------------------- | ---------- | ---------------------------------------------------------- | -------- |
 | ✅     | BUG-C1  | VersionIdentifier.cs      | 158-172    | GetHashCode violates Equals contract                       | Critical |
-|        | BUG-C2  | PackageMeta.cs            | 143-174    | Missing conflict detection for non-SemVer virtual versions | Critical |
+| ✅     | BUG-C2  | PackageMeta.cs            | 143-174    | Missing conflict detection for non-SemVer virtual versions | Critical |
 |        | BUG-E1  | PacmineEnvironment.cs     | 154-165    | Lock leak in Access() on handler error                     | Critical |
 |        | BUG-E2  | PacmineEnvironment.cs     | 200-220    | TOCTOU race in Create()                                    | Critical |
 |        | BUG-E3  | ManagedFileListHandler.cs | 78-82      | Non-deterministic file ownership                           | Critical |

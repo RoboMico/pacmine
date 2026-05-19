@@ -187,6 +187,41 @@ public class PackageMetaTests
         Assert.True(a.IsConflictingWith(b));
     }
 
+    // ── IsConflictingWith: virtual package with non-SemVer version ────────
+
+    [Fact]
+    public void IsConflictingWith_VirtualPackageNonSemVer_AnyRange_ReturnsTrue()
+    {
+        var a = CreateMinimalMeta(name: "pkg-a", version: "1.0.0",
+            provides: new() { { "virtual-pkg", new VersionIdentifier("25w14a") } });
+        var b = CreateMinimalMeta(name: "pkg-b", version: "1.0.0",
+            conflicts: new() { { "virtual-pkg", new VersionRange("*") } });
+
+        Assert.True(b.IsConflictingWith(a));
+    }
+
+    [Fact]
+    public void IsConflictingWith_VirtualPackageNonSemVer_ExactLiteralRange_ReturnsTrue()
+    {
+        var a = CreateMinimalMeta(name: "pkg-a", version: "1.0.0",
+            provides: new() { { "virtual-pkg", new VersionIdentifier("25w14a") } });
+        var b = CreateMinimalMeta(name: "pkg-b", version: "1.0.0",
+            conflicts: new() { { "virtual-pkg", new VersionRange("25w14a") } });
+
+        Assert.True(b.IsConflictingWith(a));
+    }
+
+    [Fact]
+    public void IsConflictingWith_VirtualPackageNonSemVer_ExactLiteralRange_ReturnsFalse()
+    {
+        var a = CreateMinimalMeta(name: "pkg-a", version: "1.0.0",
+            provides: new() { { "virtual-pkg", new VersionIdentifier("25w14a") } });
+        var b = CreateMinimalMeta(name: "pkg-b", version: "1.0.0",
+            conflicts: new() { { "virtual-pkg", new VersionRange("25w14b") } });
+
+        Assert.False(b.IsConflictingWith(a));
+    }
+
     [Fact]
     public void IsConflictingWith_NoConflicts_ReturnsFalse()
     {
