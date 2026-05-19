@@ -7,8 +7,8 @@ namespace Pacmine.Core;
 /// Represents a version range expression operating in one of three modes:
 /// <list type="bullet">
 ///   <item><description><b>SemVer compatible</b> — If the provided string is a valid npm-style
-///   version range (supporting <c>^</c>, <c>~</c>, <c>>=</c>, <c>></c>, <c><=</c>,
-///   <c><</c>, exact match, <c>x</c>, hyphen ranges, and union <c>||</c>), the range is
+///   version range (supporting <c>^</c>, <c>~</c>, <c>&gt;=</c>, <c>&gt;</c>, <c>&lt;=</c>,
+///   <c>&lt;</c>, exact match, <c>x</c>, hyphen ranges, and union <c>||</c>), the range is
 ///   evaluated using semver rules via <see cref="SemVersionRange"/>.</description></item>
 ///   <item><description><b>Any</b> — The string <c>"*"</c> matches any version, regardless of
 ///   whether the <see cref="VersionIdentifier"/> is semver-compatible or not.</description></item>
