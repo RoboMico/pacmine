@@ -10,7 +10,7 @@ pacmine init [dir] - Init a game instance folder as pacmine root
 pacmine destroy [dir] - Completely uninstall all packages and destroy the root
     [dir] - The directory of the root, defaults to shell's pwd
     --keep, -k - Remove the root but keep the package files (package info registry is still lost)
-pacmine install <pkgNameList> - Install a remote/local package
+pacmine install <pkgNameList> - Install a remote/local package (remote package download is planned in future version)
     --root, -r - Set the root directory for the install(default is shell's pwd)
     --local, -l - Install a local package(treat the package name as the path to the package)
 pacmine build <pathToLua> - Build a package with PackageCraft
