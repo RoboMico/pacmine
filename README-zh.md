@@ -1,5 +1,7 @@
 # Pacmine
 
+[English](README.md)
+
 为 Minecraft 设计的新一代资产包管理器，灵感来源于 Arch Linux 的 [pacman](https://pacman.archlinux.page/)。
 
 ## 为什么选择 Pacmine？

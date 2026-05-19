@@ -4,27 +4,47 @@ using Lua;
 namespace Pacmine.PackageCraft.LuaLibrary;
 
 /// <summary>
-/// Provides global Lua functions exposed to the Lua state in <see cref="PackageBuilder"/>.
+/// Provides global Lua functions exposed to the Lua state.
+/// Disabled functions are not registered into the Lua state at all — no runtime permission checks.
 /// </summary>
 public class GlobalFunctions
 {
-    private PackageBuilder builderContext;
+    private PackageBuilder builderContext = null!;
+    private readonly string? gitCommand;
+    private readonly bool allowShellExecution;
 
     /// <summary>
     /// Initializes a new instance of the <see cref="GlobalFunctions"/> class.
     /// </summary>
-    /// <param name="builderContext">The <see cref="PackageBuilder"/> instance providing environment context.</param>
-    public GlobalFunctions(PackageBuilder builderContext)
+    /// <param name="builderContext">The <see cref="PackageBuilder"/> instance providing stdout/stderr and working directory context.</param>
+    /// <param name="gitCommand">The Git command path, or <c>null</c> to disable the <c>git()</c> function.</param>
+    /// <param name="allowShellExecution">Whether the <c>shell()</c> function is available.</param>
+    public GlobalFunctions(PackageBuilder builderContext, string? gitCommand, bool allowShellExecution)
     {
         this.builderContext = builderContext;
+        this.gitCommand = gitCommand;
+        this.allowShellExecution = allowShellExecution;
+    }
+
+    /// <summary>
+    /// Sets the <see cref="PackageBuilder"/> context reference after construction.
+    /// This resolves the circular dependency: <c>GlobalFunctions</c> needs a <c>PackageBuilder</c>
+    /// reference for stdout/stderr and working directory, but the factory creates both.
+    /// </summary>
+    /// <param name="builder">The fully-constructed <see cref="PackageBuilder"/> instance.</param>
+    internal void SetBuilderContext(PackageBuilder builder)
+    {
+        builderContext = builder;
     }
 
     /// <summary>
     /// Registers the global Lua functions into the specified Lua state.
+    /// Only enabled functions are registered — disabled functions are never reachable from Lua.
     /// </summary>
     /// <param name="luaState">The Lua state whose global environment will receive the registered functions.</param>
     public void RegisterFunctions(LuaState luaState)
     {
+        // print and printerr are always safe — register unconditionally
         luaState.Environment["print"] = new LuaFunction((context, ct) =>
         {
             Print(context.GetArgument<string>(0));
@@ -35,16 +55,26 @@ public class GlobalFunctions
             PrintError(context.GetArgument<string>(0));
             return new(context.Return());
         });
-        luaState.Environment["git"] = new LuaFunction((context, ct) =>
+
+        // git: register only if a Git command is configured
+        if (gitCommand != null)
         {
-            int ret = GitCall(context.GetArgument<string>(0));
-            return new(context.Return(ret));
-        });
-        luaState.Environment["shell"] = new LuaFunction((context, ct) =>
+            luaState.Environment["git"] = new LuaFunction((context, ct) =>
+            {
+                int ret = GitCall(context.GetArgument<string>(0));
+                return new(context.Return(ret));
+            });
+        }
+
+        // shell: register only if explicitly allowed
+        if (allowShellExecution)
         {
-            int ret = ShellExecute(context.GetArgument<string>(0));
-            return new(context.Return(ret));
-        });
+            luaState.Environment["shell"] = new LuaFunction((context, ct) =>
+            {
+                int ret = ShellExecute(context.GetArgument<string>(0));
+                return new(context.Return(ret));
+            });
+        }
     }
 
     /// <summary>
@@ -67,20 +97,15 @@ public class GlobalFunctions
 
     /// <summary>
     /// Executes a Git command with the specified arguments.
+    /// This method is only called when <c>git</c> was registered (i.e., <see cref="gitCommand"/> is not null).
     /// </summary>
     /// <param name="args">The command-line arguments to pass to Git.</param>
     /// <returns>The exit code returned by the Git process.</returns>
-    /// <exception cref="Exception">Thrown when Git functionality is disabled (<see cref="PackageBuilder.GitCommand"/> is <c>null</c>).</exception>
     public int GitCall(string args)
     {
-        if (builderContext.GitCommand == null)
-        {
-            throw new Exception("Git is disabled");
-        }
-
         var psi = new ProcessStartInfo
         {
-            FileName = builderContext.GitCommand,
+            FileName = gitCommand,
             Arguments = args,
             WorkingDirectory = builderContext.SourceDirectory!.FullName,
             RedirectStandardOutput = true,
@@ -111,17 +136,12 @@ public class GlobalFunctions
 
     /// <summary>
     /// Executes a shell command.
+    /// This method is only called when <c>shell</c> was registered (i.e., <see cref="allowShellExecution"/> is <c>true</c>).
     /// </summary>
     /// <param name="command">The command to execute.</param>
     /// <returns>The exit code returned by the shell process.</returns>
-    /// <exception cref="Exception">Thrown when shell execution is disabled (<see cref="PackageBuilder.AllowShellExecution"/> is <c>false</c>).</exception>
     public int ShellExecute(string command)
     {
-        if (builderContext.AllowShellExecution == false)
-        {
-            throw new Exception("Shell execution is disabled");
-        }
-
         string shell;
         string shellArgs;
 

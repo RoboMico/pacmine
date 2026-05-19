@@ -13,11 +13,15 @@ namespace Pacmine.PackageCraft;
 /// <summary>
 /// Orchestrates the PackageCraft build pipeline: fetching sources, verifying checksums,
 /// invoking Lua build phases, and compressing the output package.
+/// 
+/// <para>This class contains <b>no permission flags</b>. Permissions are configured on
+/// <see cref="PackageBuilderFactory"/> and the appropriate Lua libraries are injected
+/// at construction time by the factory.</para>
 /// </summary>
 public class PackageBuilder
 {
-    private LuaState luaState;
-    private FileSystemInfo?[] trackedSources;
+    private readonly LuaState luaState;
+    private readonly FileSystemInfo?[] trackedSources;
     private readonly StringBuilder _stdoutBuffer = new();
     private readonly StringBuilder _stderrBuffer = new();
     private static readonly DownloadConfiguration defaultDlConfig = new()
@@ -26,67 +30,72 @@ public class PackageBuilder
         ParallelDownload = true
     };
 
-    private PackageBuilder()
+    /// <summary>
+    /// Initializes a new instance of the <see cref="PackageBuilder"/> class.
+    /// </summary>
+    /// <param name="luaState">A pre-configured Lua state (libraries already registered by the factory).</param>
+    /// <param name="recipe">The recipe defining the build configuration.</param>
+    /// <param name="workingDirectory">The working directory, or <c>null</c>.</param>
+    /// <param name="sourceDirectory">The source directory.</param>
+    /// <param name="packageDirectory">The package staging directory.</param>
+    /// <param name="outputDirectory">The output directory, or <c>null</c> (defaults to working directory).</param>
+    /// <param name="gitCommand">The Git command path, or <c>null</c> if Git is disabled.</param>
+    /// <param name="downloadConfig">The download configuration.</param>
+    internal PackageBuilder(
+        LuaState luaState,
+        PackageCraftRecipe recipe,
+        DirectoryInfo? workingDirectory,
+        DirectoryInfo? sourceDirectory,
+        DirectoryInfo? packageDirectory,
+        DirectoryInfo? outputDirectory,
+        string? gitCommand,
+        DownloadConfiguration? downloadConfig)
     {
-        luaState = LuaState.Create();
-        trackedSources = [];
+        this.luaState = luaState;
+        Recipe = recipe;
+        WorkingDirectory = workingDirectory;
+        SourceDirectory = sourceDirectory;
+        PackageDirectory = packageDirectory;
+        OutputDirectory = outputDirectory;
+        GitCommand = gitCommand;
+        DownloadConfig = downloadConfig ?? defaultDlConfig;
+        trackedSources = new FileSystemInfo?[recipe.Sources.Count];
     }
 
     /// <summary>
     /// Gets the working directory for the build.
     /// </summary>
-    public DirectoryInfo? WorkingDirectory { get; private set; } = null;
+    public DirectoryInfo? WorkingDirectory { get; }
 
     /// <summary>
     /// Gets the source directory where downloaded or copied sources are placed.
     /// </summary>
-    public DirectoryInfo? SourceDirectory { get; private set; } = null;
+    public DirectoryInfo? SourceDirectory { get; }
 
     /// <summary>
     /// Gets the package staging directory where built files are assembled.
     /// </summary>
-    public DirectoryInfo? PackageDirectory { get; private set; } = null;
+    public DirectoryInfo? PackageDirectory { get; }
 
     /// <summary>
     /// Gets the output directory where the final package archive is written.
     /// </summary>
-    public DirectoryInfo? OutputDirectory { get; private set; } = null;
+    public DirectoryInfo? OutputDirectory { get; }
 
     /// <summary>
     /// Gets the recipe that defines the build configuration.
     /// </summary>
-    public PackageCraftRecipe Recipe { get; private set; } = null!;
-    // it is guaranteeed that Recipe is not null after CreateAsync() is called
-
-    /// <summary>
-    /// Gets whether the Lua file system library (<c>filesys</c>) is available. Defaults to <c>true</c>.
-    /// </summary>
-    public bool AllowFilesysLib { get; private set; } = true;
-
-    /// <summary>
-    /// Gets whether the Lua OS library is available. Defaults to <c>true</c>.
-    /// </summary>
-    public bool AllowOsLib { get; private set; } = true;
-
-    /// <summary>
-    /// Gets whether arbitrary file operations outside the source and package directories are allowed. Defaults to <c>false</c>.
-    /// </summary>
-    public bool AllowArbitraryFileOperation { get; private set; } = false;
-
-    /// <summary>
-    /// Gets whether shell execution is allowed from Lua scripts. Defaults to <c>false</c>.
-    /// </summary>
-    public bool AllowShellExecution { get; private set; } = false;
+    public PackageCraftRecipe Recipe { get; }
 
     /// <summary>
     /// Gets the command to execute for Git operations. <c>null</c> if Git is not available.
     /// </summary>
-    public string? GitCommand { get; private set; } = null;
+    public string? GitCommand { get; }
 
     /// <summary>
     /// Gets the Downloader configuration used for downloading sources.
     /// </summary>
-    public DownloadConfiguration DownloadConfig { get; private set; } = defaultDlConfig;
+    public DownloadConfiguration DownloadConfig { get; }
 
     /// <summary>
     /// Gets the standard output stream of the build process.
@@ -113,149 +122,18 @@ public class PackageBuilder
     }
 
     /// <summary>
-    /// Creates a new <see cref="PackageBuilder"/> instance by executing the specified Lua script
-    /// and parsing the resulting recipe table.
+    /// Creates the source and package directories if they don't exist.
+    /// Must be called before fetching sources.
     /// </summary>
-    /// <param name="script">The Lua script content containing the PackageCraft recipe.</param>
-    /// <returns>A task representing the asynchronous operation, returning the configured builder.</returns>
-    public static async Task<PackageBuilder> CreateAsync(string script)
+    public void InitializeDirectories()
     {
-        PackageBuilder builder = new();
-        var result = (await builder.luaState.DoStringAsync(script)).First().Read<LuaTable>();
-        builder.Recipe = PackageCraftRecipeLuaObject.FromLuaTable(result);
-        builder.trackedSources = new FileSystemInfo?[builder.Recipe.Sources.Count];
-        return builder;
-    }
+        if (SourceDirectory == null)
+            throw new InvalidOperationException("SourceDirectory is not configured.");
+        if (PackageDirectory == null)
+            throw new InvalidOperationException("PackageDirectory is not configured.");
 
-    /// <summary>
-    /// Configures the working directory and sets default source, package, and output directories.
-    /// </summary>
-    /// <param name="workingDir">The path to the working directory.</param>
-    /// <returns>This <see cref="PackageBuilder"/> instance for chaining.</returns>
-    public PackageBuilder ConfigureWorkingDirectory(string workingDir)
-    {
-        WorkingDirectory = new DirectoryInfo(workingDir);
-        SourceDirectory = new DirectoryInfo(Path.Combine(workingDir, "src"));
-        PackageDirectory = new DirectoryInfo(Path.Combine(workingDir, "pkg"));
-        OutputDirectory = new DirectoryInfo(workingDir);
-        return this;
-    }
-
-    /// <summary>
-    /// Configures the source directory.
-    /// </summary>
-    /// <param name="srcDir">The path to the source directory.</param>
-    /// <returns>This <see cref="PackageBuilder"/> instance for chaining.</returns>
-    public PackageBuilder ConfigureSourceDirectory(string srcDir)
-    {
-        SourceDirectory = new DirectoryInfo(srcDir);
-        return this;
-    }
-
-    /// <summary>
-    /// Configures the package staging directory.
-    /// </summary>
-    /// <param name="pkgDir">The path to the package directory.</param>
-    /// <returns>This <see cref="PackageBuilder"/> instance for chaining.</returns>
-    public PackageBuilder ConfigurePackageDirectory(string pkgDir)
-    {
-        PackageDirectory = new DirectoryInfo(pkgDir);
-        return this;
-    }
-
-    /// <summary>
-    /// Configures the output directory for the final package archive.
-    /// </summary>
-    /// <param name="outDir">The path to the output directory.</param>
-    /// <returns>This <see cref="PackageBuilder"/> instance for chaining.</returns>
-    public PackageBuilder ConfigureOutputDirectory(string outDir)
-    {
-        OutputDirectory = new DirectoryInfo(outDir);
-        return this;
-    }
-
-    /// <summary>
-    /// Configures whether the Lua file system library is available.
-    /// </summary>
-    /// <param name="allow"><c>true</c> to allow; otherwise, <c>false</c>.</param>
-    /// <returns>This <see cref="PackageBuilder"/> instance for chaining.</returns>
-    public PackageBuilder ConfigureFilesysLib(bool allow)
-    {
-        AllowFilesysLib = allow;
-        return this;
-    }
-
-    /// <summary>
-    /// Configures whether the Lua OS library is available.
-    /// </summary>
-    /// <param name="allow"><c>true</c> to allow; otherwise, <c>false</c>.</param>
-    /// <returns>This <see cref="PackageBuilder"/> instance for chaining.</returns>
-    public PackageBuilder ConfigureOsLib(bool allow)
-    {
-        AllowOsLib = allow;
-        return this;
-    }
-
-    /// <summary>
-    /// Configures whether arbitrary file operations outside the source and package directories are allowed.
-    /// </summary>
-    /// <param name="allow"><c>true</c> to allow; otherwise, <c>false</c>.</param>
-    /// <returns>This <see cref="PackageBuilder"/> instance for chaining.</returns>
-    public PackageBuilder ConfigureArbitraryFileOperation(bool allow)
-    {
-        AllowArbitraryFileOperation = allow;
-        return this;
-    }
-
-    /// <summary>
-    /// Configures whether shell execution is allowed from Lua scripts.
-    /// </summary>
-    /// <param name="allow"><c>true</c> to allow; otherwise, <c>false</c>.</param>
-    /// <returns>This <see cref="PackageBuilder"/> instance for chaining.</returns>
-    public PackageBuilder ConfigureShellExecution(bool allow)
-    {
-        AllowShellExecution = allow;
-        return this;
-    }
-
-    /// <summary>
-    /// Configures the command to use when invoking Git.
-    /// </summary>
-    /// <param name="command">The Git command to use. Set <c>null</c> to disable Git.</param>
-    /// <returns>This <see cref="PackageBuilder"/> instance for chaining.</returns>
-    public PackageBuilder ConfigureGit(string? command)
-    {
-        GitCommand = command;
-        return this;
-    }
-
-    /// <summary>
-    /// Configures the Downloader service with the specified configuration.
-    /// </summary>
-    /// <param name="config">The <see cref="DownloadConfiguration"/> to use.</param>
-    /// <returns>This <see cref="PackageBuilder"/> instance for chaining.</returns>
-    public PackageBuilder ConfigureDownloadConfig(DownloadConfiguration config)
-    {
-        DownloadConfig = config;
-        return this;
-    }
-
-    /// <summary>
-    /// Initializes the build environment by creating necessary directories
-    /// and injecting the enabled Lua library into the Lua state.
-    /// </summary>
-    /// <exception cref="Exception">Thrown when source or package directories are not configured.</exception>
-    public void InitEnvironment()
-    {
-        if (SourceDirectory == null || PackageDirectory == null)
-        {
-            throw new Exception("Source or Package directory is not configured");
-        }
         SourceDirectory.Create();
         PackageDirectory.Create();
-        GlobalFunctions gf = new(this);
-        gf.RegisterFunctions(luaState);
-        luaState.Environment["filesys"] = new FilesysLuaLibrary(this);
     }
 
     /// <summary>
@@ -274,7 +152,7 @@ public class PackageBuilder
         if (src.StartsWith("http://") || src.StartsWith("https://"))
         {
             // download the file
-            DownloadService dlService = new(defaultDlConfig);
+            DownloadService dlService = new(DownloadConfig);
             string fileName = "";
             dlService.DownloadStarted += (s, e) =>
             {

@@ -1,5 +1,7 @@
 # Pacmine
 
+[中文](README-zh.md)
+
 Revolutionary assets package manager for Minecraft. Inspired by [pacman](https://pacman.archlinux.page/) from Arch Linux.
 
 ## Why Pacmine?
