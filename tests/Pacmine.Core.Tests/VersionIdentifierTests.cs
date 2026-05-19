@@ -177,8 +177,8 @@ public class VersionIdentifierTests
     [Fact]
     public void Equals_SameNonSemVer_ReturnsTrue()
     {
-        var a = new VersionIdentifier("26.1");
-        var b = new VersionIdentifier("26.1");
+        var a = new VersionIdentifier("23w33a");
+        var b = new VersionIdentifier("23w33a");
         Assert.True(a.Equals(b));
         Assert.True(a == b);
     }
@@ -214,12 +214,148 @@ public class VersionIdentifierTests
         Assert.False(b == a);
     }
 
+    // ── Equality — raw string identity (new behavior) ────────────────────
+
+    [Fact]
+    public void Equals_SemanticallyEquivalentButDifferentRawString_ReturnsFalse()
+    {
+        // "1.0.0" and "v1.0.0" are semantically equivalent per SemVer,
+        // but have different raw strings — Equals/== must return false.
+        var a = new VersionIdentifier("1.0.0");
+        var b = new VersionIdentifier("v1.0.0");
+        Assert.False(a.Equals(b));
+        Assert.False(a == b);
+        Assert.True(a != b);
+    }
+
+    [Fact]
+    public void Equals_SameVersionWithBuildMetadataDifferentRawString_ReturnsFalse()
+    {
+        // Build metadata does not affect SemVer precedence, but different
+        // raw strings must make Equals return false.
+        var a = new VersionIdentifier("1.0.0+build.1");
+        var b = new VersionIdentifier("1.0.0+build.2");
+        Assert.False(a.Equals(b));
+        Assert.False(a == b);
+        Assert.True(a != b);
+    }
+
+    [Fact]
+    public void Equals_SameVersionWithAndWithoutVPrefix_ReturnsFalse()
+    {
+        var a = new VersionIdentifier("1.2.3");
+        var b = new VersionIdentifier("v1.2.3");
+        Assert.False(a.Equals(b));
+    }
+
+    // ── IsEquivalentTo (SemVer-compatible equality) ─────────────────────
+
+    [Fact]
+    public void IsEquivalentTo_SameRawString_ReturnsTrue()
+    {
+        var a = new VersionIdentifier("1.2.3");
+        var b = new VersionIdentifier("1.2.3");
+        Assert.True(a.IsEquivalentTo(b));
+    }
+
+    [Fact]
+    public void IsEquivalentTo_SemVerWithVPrefix_ReturnsTrue()
+    {
+        var a = new VersionIdentifier("1.0.0");
+        var b = new VersionIdentifier("v1.0.0");
+        Assert.True(a.IsEquivalentTo(b));
+    }
+
+    [Fact]
+    public void IsEquivalentTo_SemVerWithBuildMetadata_ReturnsTrue()
+    {
+        // Build metadata does not affect SemVer precedence,
+        // so these are considered equivalent.
+        var a = new VersionIdentifier("1.0.0+build.1");
+        var b = new VersionIdentifier("1.0.0+build.2");
+        Assert.True(a.IsEquivalentTo(b));
+    }
+
+    [Fact]
+    public void IsEquivalentTo_SemVerWithVPrefixAndBuildMetadata_ReturnsTrue()
+    {
+        var a = new VersionIdentifier("1.0");
+        var b = new VersionIdentifier("v1.0.0+xyz");
+        Assert.True(a.IsEquivalentTo(b));
+    }
+
+    [Fact]
+    public void IsEquivalentTo_SamePrerelease_ReturnsTrue()
+    {
+        var a = new VersionIdentifier("1.0.0-alpha.1");
+        var b = new VersionIdentifier("1.0.0-alpha.1");
+        Assert.True(a.IsEquivalentTo(b));
+    }
+
+    [Fact]
+    public void IsEquivalentTo_DifferentSemVer_ReturnsFalse()
+    {
+        var a = new VersionIdentifier("1.0.0");
+        var b = new VersionIdentifier("2.0.0");
+        Assert.False(a.IsEquivalentTo(b));
+    }
+
+    [Fact]
+    public void IsEquivalentTo_DifferentPrerelease_ReturnsFalse()
+    {
+        var a = new VersionIdentifier("1.0.0-alpha");
+        var b = new VersionIdentifier("1.0.0-beta");
+        Assert.False(a.IsEquivalentTo(b));
+    }
+
+    [Fact]
+    public void IsEquivalentTo_SameNonSemVer_ReturnsTrue()
+    {
+        var a = new VersionIdentifier("25w14a");
+        var b = new VersionIdentifier("25w14a");
+        Assert.True(a.IsEquivalentTo(b));
+    }
+
+    [Fact]
+    public void IsEquivalentTo_DifferentNonSemVer_ReturnsFalse()
+    {
+        var a = new VersionIdentifier("25w14a");
+        var b = new VersionIdentifier("25w15a");
+        Assert.False(a.IsEquivalentTo(b));
+    }
+
+    [Fact]
+    public void IsEquivalentTo_MixedSemVerAndNonSemVer_FallsBackToRawString()
+    {
+        // When one side is not valid SemVer, falls back to raw string equality.
+        var semver = new VersionIdentifier("1.0.0");
+        var nonSemver = new VersionIdentifier("25w14a");
+        Assert.False(semver.IsEquivalentTo(nonSemver));
+    }
+
+    [Fact]
+    public void IsEquivalentTo_NullOther_ReturnsFalse()
+    {
+        var a = new VersionIdentifier("1.0.0");
+        Assert.False(a.IsEquivalentTo(null));
+    }
+
+    // ── GetHashCode ─────────────────────────────────────────────────────
+
     [Fact]
     public void GetHashCode_SameVersion_ReturnsSameHash()
     {
         var a = new VersionIdentifier("1.2.3");
         var b = new VersionIdentifier("1.2.3");
         Assert.Equal(a.GetHashCode(), b.GetHashCode());
+    }
+
+    [Fact]
+    public void GetHashCode_DifferentEquivalants_ReturnsDifferentHash()
+    {
+        var a = new VersionIdentifier("1.2.3+build.1");
+        var b = new VersionIdentifier("1.2.3+build.2");
+        Assert.NotEqual(a.GetHashCode(), b.GetHashCode());
     }
 
     [Fact]

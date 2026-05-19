@@ -148,10 +148,29 @@ public class VersionIdentifier : IComparable<VersionIdentifier>, IEquatable<Vers
 
     /// <summary>
     /// Determines whether the specified <see cref="VersionIdentifier"/> is equal to the current instance.
+    /// Performs an exact, ordinal comparison of the raw version strings.
+    /// Two versions are considered equal only if their raw strings are absolutely identical
+    /// (e.g., "1.0.0" and "v1.0.0" are <b>not</b> equal).
+    /// For SemVer-compatible equality, use <see cref="IsEquivalentTo(VersionIdentifier?)"/>.
     /// </summary>
     /// <param name="other">The version identifier to compare with.</param>
-    /// <returns><c>true</c> if equal; otherwise, <c>false</c>.</returns>
+    /// <returns><c>true</c> if the raw strings are identical; otherwise, <c>false</c>.</returns>
     public bool Equals(VersionIdentifier? other)
+    {
+        if (other is null)
+            return false;
+        return _raw == other._raw;
+    }
+
+    /// <summary>
+    /// Determines whether the current version is semantically equivalent to another.
+    /// When both versions are valid SemVer 2.0 strings, this uses SemVer precedence comparison
+    /// (e.g., "1.0.0" and "v1.0.0" are considered equivalent).
+    /// Falls back to exact ordinal raw-string comparison when either side is not valid SemVer.
+    /// </summary>
+    /// <param name="other">The other version identifier to compare with.</param>
+    /// <returns><c>true</c> if the versions are semantically equivalent; otherwise, <c>false</c>.</returns>
+    public bool IsEquivalentTo(VersionIdentifier? other)
     {
         if (other is null)
             return false;
@@ -162,14 +181,12 @@ public class VersionIdentifier : IComparable<VersionIdentifier>, IEquatable<Vers
 
     /// <summary>
     /// Returns the hash code for the current instance.
-    /// When the version is a valid SemVer, delegates to <see cref="SemVersion.GetHashCode"/>
-    /// so that semantically equivalent versions (e.g., "1.0.0" and "v1.0.0") produce the same hash,
-    /// consistent with <see cref="Equals(VersionIdentifier?)"/>.
-    /// Falls back to the raw string hash code for non-SemVer versions.
+    /// Based on the raw version string to remain consistent with <see cref="Equals(VersionIdentifier?)"/>
+    /// which uses exact raw-string comparison.
     /// </summary>
     public override int GetHashCode()
     {
-        return _semver?.GetHashCode() ?? RawString.GetHashCode();
+        return RawString.GetHashCode();
     }
 
     /// <summary>
