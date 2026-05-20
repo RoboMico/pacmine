@@ -157,11 +157,19 @@ public class PacmineEnvironment : IDisposable
             throw new Exception("Invalid environment directory");
 
         PacmineEnvironment env = new(directory);
-        env.Lock();
-        env.RegisterDefaultHandlers();
-        env._indexManager.Load();
+        try
+        {
+            env.Lock();
+            env.RegisterDefaultHandlers();
+            env._indexManager.Load();
+            return env;
+        }
+        catch
+        {
+            env.Dispose();
+            throw;
+        }
 
-        return env;
     }
 
     /// <summary>

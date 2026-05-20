@@ -10,36 +10,9 @@ found by AI. human checked this and removed false alarms. already fixed issues h
 
 - ~~BUG-C2: `IsConflictingWith` misses conflicts on non-SemVer virtual package versions~~
 
-### Medium Bugs
-
-#### BUG-C4: `IsNewerThan` and `IsConflictingWith` lack null guards
-
-**File:** `PackageMeta.cs:122, 140`
-
-`IsNewerThan(null)` → `NullReferenceException` at `other.Epoch`
-`IsConflictingWith(null)` → `NullReferenceException` at `other.Name`
-
-#### BUG-C5: `Version` setter accepts null
-
-**File:** `PackageMeta.cs:41`
-
-The `required` keyword prevents omission at object-initializer time, but nothing prevents setting it to null afterward via property assignment, reflection, or edge cases in deserialization. `GetFullVersionString()` would throw if this occurs.
-
-#### BUG-C6: Null `archive` parameter not guarded in `PackageParser`
-
-**File:** `PackageParser.cs:23, 39`
-
-`GetMeta(null)` and `GetPackagedTime(null)` throw `NullReferenceException`.
-
 ### Design Issues
 
 - ~~DES-C1: Mutable `VersionIdentifier.RawString` allows invalid state transitions~~
-
-#### DES-C2: Collection properties accept null via setter
-
-**File:** `PackageMeta.cs:78-106`
-
-`Groups`, `Provides`, `Depends`, `Conflicts`, `Replaces`, `Recommends` are auto-properties initialized to empty collections, but JSON deserialization with `"Provides": null` would replace them with null, causing `NullReferenceException` in any `foreach` over them. Use a property pattern with a null-coalescing setter.
 
 ### "Restrict Ahead of Time" Violations
 
@@ -51,32 +24,7 @@ The `required` keyword prevents omission at object-initializer time, but nothing
 
 ### Critical Bugs
 
-#### BUG-E1: Lock leak in `Access()` when handler registration or Load fails
-
-**File:** `PacmineEnvironment.cs:154-165`
-
-```csharp
-env.Lock();                      // lock acquired, _lockStream set
-env.RegisterDefaultHandlers();   // if this throws...
-env._indexManager.Load();        // ...or this throws...
-return env;                      // caller never gets env, can never call Dispose()
-```
-
-If `RegisterDefaultHandlers()` or `_indexManager.Load()` throws, the `FileStream` held by `_lockStream` is leaked until GC finalization, and the lock file persists on disk with no owner. Other processes are permanently blocked.
-
-**Fix:** Wrap in try/catch and call `Dispose()` on failure:
-
-```csharp
-env.Lock();
-try {
-    env.RegisterDefaultHandlers();
-    env._indexManager.Load();
-    return env;
-} catch {
-    env.Dispose();
-    throw;
-}
-```
+- ~~BUG-E1: Lock leak in `Access()` when handler registration or Load fails~~
 
 #### BUG-E2: TOCTOU race in `Create()`
 
