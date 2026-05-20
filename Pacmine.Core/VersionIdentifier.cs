@@ -17,8 +17,8 @@ public class VersionIdentifier : IComparable<VersionIdentifier>, IEquatable<Vers
     private static readonly SemVersionStyles ParseStyles =
         SemVersionStyles.OptionalPatch | SemVersionStyles.AllowV;
 
-    private string _raw = "";
-    private SemVersion? _semver;
+    private readonly string _raw;
+    private readonly SemVersion? _semver;
 
     /// <summary>
     /// Initializes a new instance of the <see cref="VersionIdentifier"/> class with the specified version string.
@@ -26,21 +26,14 @@ public class VersionIdentifier : IComparable<VersionIdentifier>, IEquatable<Vers
     /// <param name="version">The raw version string.</param>
     public VersionIdentifier(string version)
     {
-        RawString = version;
+        _raw = version;
+        SemVersion.TryParse(version, ParseStyles, out _semver);
     }
 
     /// <summary>
-    /// Gets or sets the raw version string. Setting this property re-parses the version.
+    /// Gets the raw version string.
     /// </summary>
-    public string RawString
-    {
-        get => _raw;
-        set
-        {
-            _raw = value;
-            SemVersion.TryParse(value, ParseStyles, out _semver);
-        }
-    }
+    public string RawString => _raw;
 
     /// <summary>
     /// Gets the parsed <see cref="SemVersion"/> if the version string is valid SemVer 2.0;

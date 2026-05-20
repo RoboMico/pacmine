@@ -375,15 +375,20 @@ public class VersionIdentifierTests
         Assert.Equal("1.2.3-beta", vi.ToString());
     }
 
-    // ── RawString setter re-parses ───────────────────────────────────────
+    // ── Immutability ─────────────────────────────────────────────────────
 
     [Fact]
-    public void RawString_Setter_ReparsesVersion()
+    public void Constructor_ParsesRawAndSemverCorrectly()
     {
         var vi = new VersionIdentifier("1.0.0");
         Assert.NotNull(vi.SemVersion);
+        Assert.Equal("1.0.0", vi.RawString);
+    }
 
-        vi.RawString = "not-semver";
+    [Fact]
+    public void Constructor_NonSemver_ResultsInNullSemver()
+    {
+        var vi = new VersionIdentifier("not-semver");
         Assert.Null(vi.SemVersion);
         Assert.Equal("not-semver", vi.RawString);
     }

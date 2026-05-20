@@ -12,12 +12,6 @@ found by AI. human checked this and removed false alarms. already fixed issues h
 
 ### Medium Bugs
 
-#### BUG-C3: Null constructor argument crashes `VersionIdentifier`
-
-**File:** `VersionIdentifier.cs:27`
-
-`new VersionIdentifier(null)` passes null to `SemVersion.TryParse`, which throws `ArgumentNullException`. Expected behavior would be a non-SemVer instance with `RawString` = null or throwing `ArgumentNullException` with a clearer message.
-
 #### BUG-C4: `IsNewerThan` and `IsConflictingWith` lack null guards
 
 **File:** `PackageMeta.cs:122, 140`
