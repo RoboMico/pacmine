@@ -141,7 +141,7 @@ internal static class BuildCommand
             // Clean up
             if (!noClean)
             {
-                await builder.CleanUpAsync();
+                builder.CleanUp();
             }
         }
     }

@@ -110,7 +110,7 @@ public partial class PackageMetaLuaObject : PackageMeta
             Groups = [];
             foreach (var item in value)
             {
-                Groups.Add(item.Key.Read<string>());
+                Groups.Add(item.Value.Read<string>());
             }
         }
     }

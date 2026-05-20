@@ -48,62 +48,15 @@ found by AI. human checked this and removed false alarms. already fixed issues h
 
 ### Critical Bugs
 
-#### BUG-P2: `LuaI_Groups` setter reads key instead of value
+- ~~BUG-P2: `LuaI_Groups` setter reads key instead of value~~
 
-**File:** `PackageMetaLuaObject.cs:111-113`
+- ~~BUG-P3: `VerifySourceAsync` leaks `HashAlgorithm` instances~~
 
-```csharp
-set {
-    Groups = [];
-    foreach (var item in value)
-    {
-        Groups.Add(item.Key.Read<string>());  // BUG: reads the numeric index "1", "2", etc.
-    }
-}
-```
-
-The getter writes group names as **values** with numeric keys (`table[1] = "group-a"`), but the setter reads `item.Key.Read<string>()` which returns the key (e.g., `"1"`, `"2"`) instead of the actual group name strings from `item.Value`. A recipe's `groups` are silently corrupted. Should be:
-
-```csharp
-Groups.Add(item.Value.Read<string>());
-```
-
-#### BUG-P3: `VerifySourceAsync` leaks `HashAlgorithm` instances
-
-**File:** `PackageBuilder.cs:293-300`
-
-```csharp
-HashAlgorithm hashAlgo = algo switch { ... };
-// hashAlgo is never disposed
-```
-
-`SHA1.Create()`, `SHA256.Create()`, etc. are `IDisposable`. Each call leaks native handles. Should use `using var hashAlgo = ...`.
-
-#### BUG-P4: `VerifySourceAsync` uses culture-sensitive hex comparison
-
-**File:** `PackageBuilder.cs:305`
-
-```csharp
-return Convert.ToHexString(hash).Equals(checksum, StringComparison.CurrentCultureIgnoreCase);
-```
-
-Should be `StringComparison.OrdinalIgnoreCase`. In cultures with aggressive case-folding rules (e.g., Turkish), this can produce incorrect results.
+- ~~BUG-P4: `VerifySourceAsync` uses culture-sensitive hex comparison~~
 
 ### Medium Bugs
 
-#### BUG-P5: `CleanUpAsync` is synchronous but returns `Task`
-
-**File:** `PackageBuilder.cs:401-404`
-
-```csharp
-public async Task CleanUpAsync()  // no await → CS1998 warning
-{
-    SourceDirectory?.Delete(true);
-    PackageDirectory?.Delete(true);
-}
-```
-
-Generates compiler warning CS1998. Callers expecting async deletion get synchronous blocking I/O. Should either use `await Task.Run(...)` or return `Task.CompletedTask` and remove `async`.
+- ~~BUG-P5: `CleanUpAsync` is synchronous but returns `Task`~~
 
 #### BUG-P6: Download filename race condition
 

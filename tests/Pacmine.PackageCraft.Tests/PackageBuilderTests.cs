@@ -195,7 +195,7 @@ public class PackageBuilderTests
         Assert.True(Directory.Exists(srcDir));
         Assert.True(Directory.Exists(pkgDir));
 
-        await builder.CleanUpAsync();
+        builder.CleanUp();
 
         Assert.False(Directory.Exists(srcDir));
         Assert.False(Directory.Exists(pkgDir));

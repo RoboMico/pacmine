@@ -290,7 +290,7 @@ public class PackageBuilder
         var seg = Recipe.SourceChecksums[index].Split(':');
         var algo = seg[0];
         var checksum = seg[1];
-        HashAlgorithm hashAlgo = algo switch
+        using HashAlgorithm hashAlgo = algo switch
         {
             "sha1" => SHA1.Create(),
             "sha256" => SHA256.Create(),
@@ -302,7 +302,7 @@ public class PackageBuilder
         if (entry is FileInfo file)
         {
             var hash = hashAlgo.ComputeHash(File.ReadAllBytes(file.FullName));
-            return Convert.ToHexString(hash).Equals(checksum, StringComparison.CurrentCultureIgnoreCase);
+            return Convert.ToHexString(hash).Equals(checksum, StringComparison.OrdinalIgnoreCase);
         }
 
         if (entry is DirectoryInfo)
@@ -397,8 +397,7 @@ public class PackageBuilder
     /// <summary>
     /// Cleans up the source and package directories.
     /// </summary>
-    /// <returns>A task representing the asynchronous operation.</returns>
-    public async Task CleanUpAsync()
+    public void CleanUp()
     {
         SourceDirectory?.Delete(true);
         PackageDirectory?.Delete(true);
