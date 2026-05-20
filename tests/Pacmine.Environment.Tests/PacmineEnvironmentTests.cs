@@ -50,7 +50,7 @@ public class PacmineEnvironmentTests : IDisposable
         // Should not throw
         using var env = PacmineEnvironment.Access(_tempDir);
         Assert.NotNull(env);
-        Assert.Equal(_tempDir, env.Path);
+        Assert.Equal(_tempDir, env.RootPath);
     }
 
     [Fact]

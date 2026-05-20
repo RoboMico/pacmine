@@ -28,110 +28,19 @@ found by AI. human checked this and removed false alarms. already fixed issues h
 
 - ~~BUG-E2: TOCTOU race in `Create()`~~
 
-#### BUG-E3: Non-deterministic file ownership in `ManagedFileListHandler.OnRebuild`
-
-**File:** `ManagedFileListHandler.cs:78-82`
-
-If two packages declare ownership of the same file path, the last registry iterated wins:
-
-```csharp
-mngFiles[kvp.Key] = new ManagedFileRecord(registry.Meta.Name, kvp.Value);
-```
-
-Since `registries` order depends on filesystem enumeration order (non-deterministic), two rebuilds can produce different ownership assignments. This is a silent data corruption bug.
-
-**Fix:** Detect and report file ownership conflicts, or use deterministic ordering (e.g., sort by package name).
-
 ### Medium Bugs
 
-#### ~~BUG-E4: Two separate `IndexManager` instances created during `Create()`~~
+- ~~BUG-E4: Two separate `IndexManager` instances created during `Create()`~~
 
-#### BUG-E5: `RemoveRegistry` null-forgiving operator masks deserialization failures
+- ~~BUG-E5: `RemoveRegistry` null-forgiving operator masks deserialization failures~~
 
-**File:** `PacmineEnvironment.cs:474`
+- ~~BUG-E6: `CheckCanUninstall` produces duplicate reasons for multiple virtual package providers~~
 
-```csharp
-registry!   // null-forgiving
-```
-
-If a registry JSON file is empty or malformed, `Deserialize` returns null. The `!` operator suppresses the warning but doesn't handle the null, causing `NullReferenceException` in downstream handlers. Add a null check.
-
-#### BUG-E6: `CheckCanUninstall` produces duplicate reasons for multiple virtual package providers
-
-**File:** `PacmineEnvironment.cs:389-426`
-
-If package P provides virtual-a and virtual-b, and both have the same depender that would be broken, a `BreakDependDenyReason` is added for each. The result array may contain duplicates the caller must deduplicate.
-
-#### BUG-E7: `FileShare.ReadWrite` in `GetLockerPid()` reader is overly permissive
-
-**File:** `PacmineEnvironment.cs:133`
-
-The reader opens with `FileShare.ReadWrite` while the lock holder uses `FileShare.Read`. While not a bug per se, it allows concurrent readers with write-intent. Use `FileShare.Read` for consistency.
+- ~~BUG-E7: `FileShare.ReadWrite` in `GetLockerPid()` reader is overly permissive~~
 
 ### Design Issues
 
-#### DES-E1: `new T()` constraint is fragile for `Initialize()`
-
-**File:** `IndexHandler.cs:60`
-
-`IndexHandler<T>` requires `T : new()`, and `Initialize()` simply writes `JsonSerializer.Serialize(new T())`. This assumes the default value is the identity element for the index. For future handler types, this assumption may not hold. An explicit abstract `Initialize()` override per handler would be safer.
-
-#### DES-E2: `PacmineEnvironment.Path` shadows `System.IO.Path`
-
-**File:** `PacmineEnvironment.cs:50`
-
-The property named `Path` forces the use of fully-qualified `System.IO.Path` throughout the file. Renaming to `RootPath` or `EnvironmentPath` would be cleaner.
-
-#### DES-E3: No intra-process thread safety
-
-**File:** Multiple
-
-`IndexManager._handlers` list and all handler `_content` dictionaries lack synchronization. While the file lock prevents cross-process races, multiple threads in the same process could produce torn reads. Either document single-threaded use or add synchronization.
-
-### "Restrict Ahead of Time" Violations
-
-#### R-E1: `_indexManager = null!` suppresses nullable reference type safety
-
-**File:** `PacmineEnvironment.cs:15`
-
-The field is null until `RegisterDefaultHandlers()` is called. Any code path accessing the index manager before registration gets NRE at runtime instead of compile-time. Solution: use `Lazy<IndexManager>` or initialize in the constructor.
-
-#### R-E2: No validation on package name at API boundary
-
-**File:** `PacmineEnvironment.cs:439, 459, 553`
-
-Empty/null package names pass unchecked and crash at `packageName[0]` with `IndexOutOfRangeException`. Filesystem-illegal characters in package names crash in `Directory.Create()` or `File.WriteAllText`. Validate at entry points.
-
-#### R-E3: Public `Path`, `SpecialFolder`, `RegistryFolder`, `IndexFolder`, `LockFile` exposed
-
-**File:** `PacmineEnvironment.cs:50-61`
-
-The internal directory structure and lock file path are publicly readable. The lock file exposure is particularly risky -- callers could accidentally touch it.
-
-### DRY Violations
-
-This is the **single largest code smell in the codebase**. All five index handlers (`PackageListHandler`, `ManagedFileListHandler`, `DenyListHandler`, `DependsOnHandler`, `VirtualPackagesHandler`) contain virtually identical code for:
-
-1. **`OnLoad()`** — 14 lines each (~70 lines total), differing only in the type parameter to `JsonSerializer.Deserialize<>`
-2. **`Content` property setter** — 5 lines each (~25 lines total), identical pattern: `set { _content = value; File.WriteAllText(...); }`
-3. **`OnRebuild` diff-then-write pattern** — 3 lines each (~15 lines total): `JsonSerializer.Serialize` → string compare → `Content = ...`
-
-All should be lifted into `IndexHandler<T>`:
-
-- A protected abstract `string FileName { get; }` property
-- A `protected bool SetIfChanged(T newContent)` helper
-- Default implementations of `OnLoad()` and `Content` setter in the base class
-
-**This refactor would eliminate ~110 lines of copy-pasted code and ensure consistent behavior across all handlers.**
-
-### File I/O Error Handling Gaps
-
-| Operation                | Location              | Handling                                     |
-| ------------------------ | --------------------- | -------------------------------------------- |
-| `WriteRegistry()`        | File.WriteAllText     | **Not caught** — disk-full/perms propagate   |
-| `GetRegistry()`          | File.ReadAllText      | **Not caught** — file-in-use/perms propagate |
-| `IndexManager.Rebuild()` | Directory enumeration | Silently swallowed — masks real errors       |
-| All `OnLoad()`           | File.ReadAllText      | Silently swallowed → empty content           |
+- ~~DES-E2: `PacmineEnvironment.Path` shadows `System.IO.Path`~~
 
 ---
 

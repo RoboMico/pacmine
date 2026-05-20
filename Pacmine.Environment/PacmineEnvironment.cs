@@ -37,17 +37,17 @@ public class PacmineEnvironment : IDisposable
 
     private PacmineEnvironment(string path)
     {
-        Path = path;
-        SpecialFolder = new(System.IO.Path.Combine(path, SPECIAL_FOLDER_NAME));
-        RegistryFolder = new(System.IO.Path.Combine(SpecialFolder.FullName, REGISTRY_FOLDER_NAME));
-        IndexFolder = new(System.IO.Path.Combine(SpecialFolder.FullName, INDEX_FOLDER_NAME));
-        LockFile = new(System.IO.Path.Combine(SpecialFolder.FullName, LOCKFILE_NAME));
+        RootPath = path;
+        SpecialFolder = new(Path.Combine(path, SPECIAL_FOLDER_NAME));
+        RegistryFolder = new(Path.Combine(SpecialFolder.FullName, REGISTRY_FOLDER_NAME));
+        IndexFolder = new(Path.Combine(SpecialFolder.FullName, INDEX_FOLDER_NAME));
+        LockFile = new(Path.Combine(SpecialFolder.FullName, LOCKFILE_NAME));
     }
 
     /// <summary>
     /// Gets the root path of the environment.
     /// </summary>
-    public string Path { get; private set; }
+    public string RootPath { get; private set; }
 
     /// <summary>
     /// Gets the special folder directory for this environment.
@@ -80,7 +80,7 @@ public class PacmineEnvironment : IDisposable
         try
         {
             lockStream = new FileStream(
-                System.IO.Path.Combine(path, SPECIAL_FOLDER_NAME, LOCKFILE_NAME),
+                Path.Combine(path, SPECIAL_FOLDER_NAME, LOCKFILE_NAME),
                 FileMode.OpenOrCreate,
                 FileAccess.ReadWrite,
                 FileShare.Read);
@@ -99,7 +99,7 @@ public class PacmineEnvironment : IDisposable
 
     private void Lock()
     {
-        LockDirectory(Path, out _lockStream);
+        LockDirectory(RootPath, out _lockStream);
     }
 
     private void Unlock()
@@ -124,7 +124,7 @@ public class PacmineEnvironment : IDisposable
     /// <returns>The process ID of the locker, or -1 if the lock file does not exist or cannot be read.</returns>
     public static int GetLockerPid(string directory)
     {
-        var lockFile = new FileInfo(System.IO.Path.Combine(directory, SPECIAL_FOLDER_NAME, LOCKFILE_NAME));
+        var lockFile = new FileInfo(Path.Combine(directory, SPECIAL_FOLDER_NAME, LOCKFILE_NAME));
         if (!lockFile.Exists)
             return -1;
 
@@ -134,7 +134,7 @@ public class PacmineEnvironment : IDisposable
                 lockFile.FullName,
                 FileMode.Open,
                 FileAccess.Read,
-                FileShare.ReadWrite);
+                FileShare.Read);
             using var reader = new StreamReader(fs, Encoding.UTF8);
             var text = reader.ReadToEnd();
             return int.TryParse(text.Trim(), out var pid) ? pid : -1;
@@ -153,7 +153,7 @@ public class PacmineEnvironment : IDisposable
     /// <exception cref="Exception">Thrown when the environment directory does not exist or is locked by another process.</exception>
     public static PacmineEnvironment Access(string directory)
     {
-        if (!Directory.Exists(System.IO.Path.Combine(directory, SPECIAL_FOLDER_NAME)))
+        if (!Directory.Exists(Path.Combine(directory, SPECIAL_FOLDER_NAME)))
             throw new Exception("Invalid environment directory");
 
         PacmineEnvironment env = new(directory);
@@ -207,7 +207,7 @@ public class PacmineEnvironment : IDisposable
     /// <exception cref="Exception">Thrown when an environment already exists in the directory.</exception>
     public static PacmineEnvironment Create(string directory)
     {
-        string spFolderPath = System.IO.Path.Combine(directory, SPECIAL_FOLDER_NAME);
+        string spFolderPath = Path.Combine(directory, SPECIAL_FOLDER_NAME);
         if (Directory.Exists(spFolderPath))
             throw new Exception("Environment already exists");
 
@@ -215,8 +215,8 @@ public class PacmineEnvironment : IDisposable
         LockDirectory(directory, out FileStream lockStream);
         try
         {
-            var registryFolder = Directory.CreateDirectory(System.IO.Path.Combine(spFolderPath, REGISTRY_FOLDER_NAME));
-            var indexFolder = Directory.CreateDirectory(System.IO.Path.Combine(spFolderPath, INDEX_FOLDER_NAME));
+            var registryFolder = Directory.CreateDirectory(Path.Combine(spFolderPath, REGISTRY_FOLDER_NAME));
+            var indexFolder = Directory.CreateDirectory(Path.Combine(spFolderPath, INDEX_FOLDER_NAME));
 
             // Initialize index files while holding the lock
             var indexManager = new IndexManager(registryFolder);
@@ -239,8 +239,9 @@ public class PacmineEnvironment : IDisposable
 
     /// <summary>
     /// Checks if the specified packages are acceptable in the environment (no conflict, dependencies satisfied, etc).
-    /// Note that this method does not check the internal compatibility of <paramref name="packages"/>.
+    /// Note that this method does not check the internal compatibility of <paramref name="packages"/> parameter.
     /// See <see cref="PackageMeta.IsConflictingWith(PackageMeta)"/> for that.
+    /// You may also want to check for potentially conflicting files with <see cref="CheckConflictFiles(string[],string[])"/>.
     /// </summary>
     /// <param name="packages">The package list to check.</param>
     /// <returns>An array of <see cref="UnacceptReason"/> indicating why each package is unacceptable.</returns>
@@ -444,7 +445,7 @@ public class PacmineEnvironment : IDisposable
             }
         }
 
-        return reasons.ToArray();
+        return reasons.Distinct().ToArray();
     }
 
     /// <summary>
@@ -455,11 +456,11 @@ public class PacmineEnvironment : IDisposable
     public void WriteRegistry(PackageRegistry registry)
     {
         char initLetter = registry.Meta.Name[0];
-        DirectoryInfo layerDir = new(System.IO.Path.Combine(RegistryFolder.FullName, initLetter.ToString()));
+        DirectoryInfo layerDir = new(Path.Combine(RegistryFolder.FullName, initLetter.ToString()));
         if (!layerDir.Exists) layerDir.Create();
 
         File.WriteAllText(
-            System.IO.Path.Combine(
+            Path.Combine(
                 layerDir.FullName,
                 $"{registry.Meta.Name}.json"),
             JsonSerializer.Serialize(registry));
@@ -475,7 +476,7 @@ public class PacmineEnvironment : IDisposable
     public void RemoveRegistry(string packageName)
     {
         char initLetter = packageName[0];
-        var registryFile = new FileInfo(System.IO.Path.Combine(
+        var registryFile = new FileInfo(Path.Combine(
             RegistryFolder.FullName,
             initLetter.ToString(),
             $"{packageName}.json"));
@@ -483,13 +484,14 @@ public class PacmineEnvironment : IDisposable
         if (!registryFile.Exists)
             throw new Exception($"Package '{packageName}' does not exist in the registry");
 
-        // Read the registry before deleting it, so we can access virtual package info
+        // Read the registry before deleting it
         var registry = JsonSerializer.Deserialize<PackageRegistry>(
             File.ReadAllText(registryFile.FullName));
 
         registryFile.Delete();
-
-        _indexManager.OnRemoveRegistry(registry!);
+        // registry == null => registry file is corrupted, just ignore its content
+        if (registry != null)
+            _indexManager.OnRemoveRegistry(registry);
     }
 
     /// <summary>
@@ -510,7 +512,7 @@ public class PacmineEnvironment : IDisposable
 
         foreach (var filePath in ownedFiles)
         {
-            var fullPath = System.IO.Path.Combine(Path, filePath);
+            var fullPath = Path.Combine(RootPath, filePath);
             try
             {
                 if (File.Exists(fullPath))
@@ -549,7 +551,7 @@ public class PacmineEnvironment : IDisposable
             // Check if the file exists on disk but is not managed (orphan file)
             else
             {
-                var fullPath = System.IO.Path.Combine(Path, fileName);
+                var fullPath = Path.Combine(RootPath, fileName);
                 if (File.Exists(fullPath))
                 {
                     conflicts[fileName] = string.Empty;
@@ -568,7 +570,7 @@ public class PacmineEnvironment : IDisposable
     public PackageRegistry? GetRegistry(string packageName)
     {
         char initLetter = packageName[0];
-        var registryFile = new FileInfo(System.IO.Path.Combine(
+        var registryFile = new FileInfo(Path.Combine(
             RegistryFolder.FullName,
             initLetter.ToString(),
             $"{packageName}.json"));
@@ -611,10 +613,10 @@ public class PacmineEnvironment : IDisposable
 
         foreach (var sourceFile in sourceFiles)
         {
-            var relativePath = System.IO.Path.GetRelativePath(source.FullName, sourceFile.FullName);
-            var targetPath = System.IO.Path.Combine(Path, relativePath);
+            var relativePath = Path.GetRelativePath(source.FullName, sourceFile.FullName);
+            var targetPath = Path.Combine(RootPath, relativePath);
 
-            var targetDir = System.IO.Path.GetDirectoryName(targetPath);
+            var targetDir = Path.GetDirectoryName(targetPath);
             if (targetDir != null)
                 Directory.CreateDirectory(targetDir);
 
@@ -632,7 +634,7 @@ public class PacmineEnvironment : IDisposable
         // Remove stale files that are no longer in the source directory
         foreach (var staleFile in previouslyOwned)
         {
-            var fullPath = System.IO.Path.Combine(Path, staleFile);
+            var fullPath = Path.Combine(RootPath, staleFile);
             try
             {
                 if (File.Exists(fullPath))
