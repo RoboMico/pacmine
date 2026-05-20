@@ -26,13 +26,7 @@ found by AI. human checked this and removed false alarms. already fixed issues h
 
 - ~~BUG-E1: Lock leak in `Access()` when handler registration or Load fails~~
 
-#### BUG-E2: TOCTOU race in `Create()`
-
-**File:** `PacmineEnvironment.cs:200-220`
-
-Two processes calling `Create()` simultaneously can both pass `Directory.Exists(spFolderPath)` before either acquires the lock. Both write initial index files, then one fails on `Lock()`. The directory exists on disk with potentially corrupted index files from the process that never acquired the lock.
-
-**Fix:** Acquire the lock first, then check/create directories.
+- ~~BUG-E2: TOCTOU race in `Create()`~~
 
 #### BUG-E3: Non-deterministic file ownership in `ManagedFileListHandler.OnRebuild`
 
@@ -50,11 +44,7 @@ Since `registries` order depends on filesystem enumeration order (non-determinis
 
 ### Medium Bugs
 
-#### BUG-E4: Two separate `IndexManager` instances created during `Create()`
-
-**File:** `PacmineEnvironment.cs:210-219`
-
-An `initIndex` manager writes skeleton files to disk, then is discarded. `Access()` creates a second manager that loads the recently-written files. If `Access()` fails, skeleton files remain on disk with no lock. The initial write should happen after lock acquisition with the same manager instance.
+#### ~~BUG-E4: Two separate `IndexManager` instances created during `Create()`~~
 
 #### BUG-E5: `RemoveRegistry` null-forgiving operator masks deserialization failures
 

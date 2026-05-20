@@ -75,31 +75,31 @@ public class PacmineEnvironment : IDisposable
     /// </summary>
     public IndexManager IndexManager => _indexManager;
 
-    private void Lock()
+    private static void LockDirectory(string path, out FileStream lockStream)
     {
         try
         {
-            _lockStream = new FileStream(
-                LockFile.FullName,
+            lockStream = new FileStream(
+                System.IO.Path.Combine(path, SPECIAL_FOLDER_NAME, LOCKFILE_NAME),
                 FileMode.OpenOrCreate,
                 FileAccess.ReadWrite,
                 FileShare.Read);
-            _lockStream.SetLength(0);
+            lockStream.SetLength(0);
             var pidBytes = Encoding.UTF8.GetBytes(System.Environment.ProcessId.ToString());
-            _lockStream.Write(pidBytes);
-            _lockStream.Flush();
+            lockStream.Write(pidBytes);
+            lockStream.Flush();
         }
         catch (IOException ex)
         {
-            var pid = TryReadLockPid();
+            var pid = GetLockerPid(path);
             var extra = pid >= 0 ? $" by process {pid}" : "";
             throw new IOException($"Environment is locked{extra}.", ex);
         }
     }
 
-    private int TryReadLockPid()
+    private void Lock()
     {
-        return GetLockerPid(Path);
+        LockDirectory(Path, out _lockStream);
     }
 
     private void Unlock()
@@ -160,7 +160,8 @@ public class PacmineEnvironment : IDisposable
         try
         {
             env.Lock();
-            env.RegisterDefaultHandlers();
+            env._indexManager = new(env.RegistryFolder);
+            RegisterDefaultHandlers(env._indexManager, env.IndexFolder);
             env._indexManager.Load();
             return env;
         }
@@ -175,14 +176,13 @@ public class PacmineEnvironment : IDisposable
     /// <summary>
     /// Registers the standard set of index handlers into the <see cref="IndexManager"/>.
     /// </summary>
-    private void RegisterDefaultHandlers()
+    private static void RegisterDefaultHandlers(IndexManager manager, DirectoryInfo indexFolder)
     {
-        _indexManager = new IndexManager(RegistryFolder);
-        _indexManager.AddHandler(new PackageListHandler(IndexFolder));
-        _indexManager.AddHandler(new VirtualPackagesHandler(IndexFolder));
-        _indexManager.AddHandler(new DependsOnHandler(IndexFolder));
-        _indexManager.AddHandler(new ManagedFileListHandler(IndexFolder));
-        _indexManager.AddHandler(new DenyListHandler(IndexFolder));
+        manager.AddHandler(new PackageListHandler(indexFolder));
+        manager.AddHandler(new VirtualPackagesHandler(indexFolder));
+        manager.AddHandler(new DependsOnHandler(indexFolder));
+        manager.AddHandler(new ManagedFileListHandler(indexFolder));
+        manager.AddHandler(new DenyListHandler(indexFolder));
     }
 
     /// <summary>
@@ -209,22 +209,32 @@ public class PacmineEnvironment : IDisposable
     {
         string spFolderPath = System.IO.Path.Combine(directory, SPECIAL_FOLDER_NAME);
         if (Directory.Exists(spFolderPath))
-            throw new Exception("Environment already created");
+            throw new Exception("Environment already exists");
 
-        // Create the directory tree
-        var registryFolder = Directory.CreateDirectory(System.IO.Path.Combine(spFolderPath, REGISTRY_FOLDER_NAME));
-        var indexFolder = Directory.CreateDirectory(System.IO.Path.Combine(spFolderPath, INDEX_FOLDER_NAME));
+        Directory.CreateDirectory(spFolderPath);
+        LockDirectory(directory, out FileStream lockStream);
+        try
+        {
+            var registryFolder = Directory.CreateDirectory(System.IO.Path.Combine(spFolderPath, REGISTRY_FOLDER_NAME));
+            var indexFolder = Directory.CreateDirectory(System.IO.Path.Combine(spFolderPath, INDEX_FOLDER_NAME));
 
-        // Write initial index files before acquiring the full environment lock
-        var initIndex = new IndexManager(registryFolder);
-        initIndex.AddHandler(new PackageListHandler(indexFolder));
-        initIndex.AddHandler(new VirtualPackagesHandler(indexFolder));
-        initIndex.AddHandler(new DependsOnHandler(indexFolder));
-        initIndex.AddHandler(new ManagedFileListHandler(indexFolder));
-        initIndex.AddHandler(new DenyListHandler(indexFolder));
-        initIndex.Initialize();
+            // Initialize index files while holding the lock
+            var indexManager = new IndexManager(registryFolder);
+            RegisterDefaultHandlers(indexManager, indexFolder);
+            indexManager.Initialize();
 
-        return Access(directory);
+            // Create environment and wire up the already-acquired resources
+            PacmineEnvironment env = new(directory);
+            env._lockStream = lockStream;
+            env._indexManager = indexManager;
+            return env;
+        }
+        catch
+        {
+            lockStream.Dispose();
+            Directory.Delete(spFolderPath, true);
+            throw;
+        }
     }
 
     /// <summary>
