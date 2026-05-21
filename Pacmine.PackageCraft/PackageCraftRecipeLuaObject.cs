@@ -1,4 +1,5 @@
 using Lua;
+using Pacmine.Core;
 
 namespace Pacmine.PackageCraft;
 
@@ -7,16 +8,30 @@ namespace Pacmine.PackageCraft;
 /// with Lua attribute mappings for use in PackageCraft build scripts.
 /// </summary>
 [LuaObject]
-public partial class PackageCraftRecipeLuaObject : PackageCraftRecipe
+public partial class PackageCraftRecipeLuaObject
 {
+    /// <summary>
+    /// Gets the underlying <see cref="PackageCraftRecipe"/> model instance wrapped by this object.
+    /// </summary>
+    public PackageCraftRecipe Recipe { get; }
+
+    /// <summary>
+    /// Initializes a new <see cref="PackageCraftRecipeLuaObject"/> that wraps the specified <see cref="PackageCraftRecipe"/>.
+    /// </summary>
+    /// <param name="recipe">The package craft recipe model to wrap.</param>
+    public PackageCraftRecipeLuaObject(PackageCraftRecipe recipe)
+    {
+        Recipe = recipe;
+    }
+
     /// <summary>
     /// Gets or sets the protocol version, mapped to the Lua field <c>protocol</c>.
     /// </summary>
     [LuaMember("protocol")]
     public string LuaI_Protocol
     {
-        get => Protocol;
-        set => Protocol = value;
+        get => Recipe.Protocol;
+        set => Recipe.Protocol = value;
     }
 
     /// <summary>
@@ -25,8 +40,8 @@ public partial class PackageCraftRecipeLuaObject : PackageCraftRecipe
     [LuaMember("meta")]
     public LuaTable LuaI_Meta
     {
-        get => ((PackageMetaLuaObject)Meta).ToLuaTable();
-        set => Meta = PackageMetaLuaObject.FromLuaTable(value);
+        get => new PackageMetaLuaObject(Recipe.Meta).ToLuaTable();
+        set => Recipe.Meta = PackageMetaLuaObject.FromLuaTable(value).Meta;
     }
 
     /// <summary>
@@ -35,24 +50,8 @@ public partial class PackageCraftRecipeLuaObject : PackageCraftRecipe
     [LuaMember("sources")]
     public LuaTable LuaI_Sources
     {
-        get
-        {
-            LuaTable table = [];
-            for (int i = 0; i < Sources.Count; i++)
-            {
-                // index in lua arrays starts from 1
-                table[i + 1] = Sources[i];
-            }
-            return table;
-        }
-        set
-        {
-            Sources = [];
-            foreach (var pair in value)
-            {
-                Sources.Add(pair.Value.Read<string>());
-            }
-        }
+        get => LuaTableHelper.ListToLuaArray(Recipe.Sources);
+        set => Recipe.Sources = LuaTableHelper.LuaArrayToList<string>(value);
     }
 
     /// <summary>
@@ -61,23 +60,8 @@ public partial class PackageCraftRecipeLuaObject : PackageCraftRecipe
     [LuaMember("source_checksums")]
     public LuaTable LuaI_SourceChecksums
     {
-        get
-        {
-            LuaTable table = [];
-            for (int i = 0; i < SourceChecksums.Count; i++)
-            {
-                table[i + 1] = SourceChecksums[i];
-            }
-            return table;
-        }
-        set
-        {
-            SourceChecksums = [];
-            foreach (var pair in value)
-            {
-                SourceChecksums.Add(pair.Value.Read<string>());
-            }
-        }
+        get => LuaTableHelper.ListToLuaArray(Recipe.SourceChecksums);
+        set => Recipe.SourceChecksums = LuaTableHelper.LuaArrayToList<string>(value);
     }
 
     /// <summary>
@@ -86,8 +70,8 @@ public partial class PackageCraftRecipeLuaObject : PackageCraftRecipe
     [LuaMember("prepare")]
     public LuaValue LuaI_Prepare
     {
-        get => Prepare ?? LuaValue.Nil;
-        set => Prepare = (value.Type == LuaValueType.Nil) ? null : value.Read<LuaFunction>();
+        get => Recipe.Prepare ?? LuaValue.Nil;
+        set => Recipe.Prepare = (value.Type == LuaValueType.Nil) ? null : value.Read<LuaFunction>();
 
     }
 
@@ -97,8 +81,8 @@ public partial class PackageCraftRecipeLuaObject : PackageCraftRecipe
     [LuaMember("get_version")]
     public LuaValue LuaI_GetVersion
     {
-        get => GetVersion ?? LuaValue.Nil;
-        set => GetVersion = (value.Type == LuaValueType.Nil) ? null : value.Read<LuaFunction>();
+        get => Recipe.GetVersion ?? LuaValue.Nil;
+        set => Recipe.GetVersion = (value.Type == LuaValueType.Nil) ? null : value.Read<LuaFunction>();
     }
 
     /// <summary>
@@ -107,8 +91,8 @@ public partial class PackageCraftRecipeLuaObject : PackageCraftRecipe
     [LuaMember("build")]
     public LuaValue LuaI_Build
     {
-        get => Build ?? LuaValue.Nil;
-        set => Build = (value.Type == LuaValueType.Nil) ? null : value.Read<LuaFunction>();
+        get => Recipe.Build ?? LuaValue.Nil;
+        set => Recipe.Build = (value.Type == LuaValueType.Nil) ? null : value.Read<LuaFunction>();
     }
 
     /// <summary>
@@ -117,8 +101,8 @@ public partial class PackageCraftRecipeLuaObject : PackageCraftRecipe
     [LuaMember("check")]
     public LuaValue LuaI_Check
     {
-        get => Check ?? LuaValue.Nil;
-        set => Check = (value.Type == LuaValueType.Nil) ? null : value.Read<LuaFunction>();
+        get => Recipe.Check ?? LuaValue.Nil;
+        set => Recipe.Check = (value.Type == LuaValueType.Nil) ? null : value.Read<LuaFunction>();
     }
 
     /// <summary>
@@ -127,21 +111,26 @@ public partial class PackageCraftRecipeLuaObject : PackageCraftRecipe
     [LuaMember("package")]
     public LuaValue LuaI_Package
     {
-        get => Package ?? LuaValue.Nil;
-        set => Package = (value.Type == LuaValueType.Nil) ? null : value.Read<LuaFunction>();
+        get => Recipe.Package ?? LuaValue.Nil;
+        set => Recipe.Package = (value.Type == LuaValueType.Nil) ? null : value.Read<LuaFunction>();
     }
 
     /// <summary>
     /// Creates a new <see cref="PackageCraftRecipeLuaObject"/> from a Lua table by reading each known field.
     /// </summary>
     /// <param name="table">The Lua table containing recipe data.</param>
-    /// <returns>A populated <see cref="PackageCraftRecipeLuaObject"/> instance.</returns>
+    /// <returns>A populated <see cref="PackageCraftRecipeLuaObject"/> instance wrapping the parsed <see cref="PackageCraftRecipe"/>.</returns>
     public static PackageCraftRecipeLuaObject FromLuaTable(LuaTable table)
     {
-        return new()
+        var recipe = new PackageCraftRecipe // placeholder values
         {
-            Protocol = table["protocol"].Read<string>(),
-            Meta = PackageMetaLuaObject.FromLuaTable(table["meta"].Read<LuaTable>()),
+            Protocol = "-",
+            Meta = new PackageMeta() { Name = "a", Version = new("1") }
+        };
+        return new PackageCraftRecipeLuaObject(recipe)
+        {
+            LuaI_Protocol = table["protocol"].Read<string>(),
+            LuaI_Meta = table["meta"].Read<LuaTable>(),
             LuaI_Sources = table["sources"].Read<LuaTable>(),
             LuaI_SourceChecksums = table["source_checksums"].Read<LuaTable>(),
             LuaI_Prepare = table["prepare"],
@@ -160,8 +149,8 @@ public partial class PackageCraftRecipeLuaObject : PackageCraftRecipe
     {
         return new()
         {
-            ["protocol"] = Protocol,
-            ["meta"] = ((PackageMetaLuaObject)Meta).ToLuaTable(),
+            ["protocol"] = LuaI_Protocol,
+            ["meta"] = LuaI_Meta,
             ["sources"] = LuaI_Sources,
             ["source_checksums"] = LuaI_SourceChecksums,
             ["prepare"] = LuaI_Prepare,

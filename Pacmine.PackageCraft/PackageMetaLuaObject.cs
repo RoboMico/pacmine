@@ -8,56 +8,30 @@ namespace Pacmine.PackageCraft;
 /// properties with Lua attribute mappings for use in PackageCraft build scripts.
 /// </summary>
 [LuaObject]
-public partial class PackageMetaLuaObject : PackageMeta
+public partial class PackageMetaLuaObject
 {
+    /// <summary>
+    /// Gets the underlying <see cref="PackageMeta"/> model instance wrapped by this object.
+    /// </summary>
+    public PackageMeta Meta { get; }
+
+    /// <summary>
+    /// Initializes a new <see cref="PackageMetaLuaObject"/> that wraps the specified <see cref="PackageMeta"/>.
+    /// </summary>
+    /// <param name="meta">The package metadata model to wrap.</param>
+    public PackageMetaLuaObject(PackageMeta meta)
+    {
+        Meta = meta;
+    }
+
     /// <summary>
     /// Gets or sets the package name, mapped to the Lua field <c>name</c>.
     /// </summary>
     [LuaMember("name")]
     public string LuaI_Name
     {
-        get => Name;
-        set => Name = value;
-    }
-
-    /// <summary>
-    /// Gets or sets the package description, mapped to the Lua field <c>description</c>.
-    /// </summary>
-    [LuaMember("description")]
-    public string LuaI_Description
-    {
-        get => Description;
-        set => Description = value;
-    }
-
-    /// <summary>
-    /// Gets or sets the upstream URL, mapped to the Lua field <c>upstream_url</c>.
-    /// </summary>
-    [LuaMember("upstream_url")]
-    public string LuaI_UpstreamUrl
-    {
-        get => UpstreamUrl;
-        set => UpstreamUrl = value;
-    }
-
-    /// <summary>
-    /// Gets or sets the package category, mapped to the Lua field <c>category</c>.
-    /// </summary>
-    [LuaMember("category")]
-    public string LuaI_Category
-    {
-        get => Category;
-        set => Category = value;
-    }
-
-    /// <summary>
-    /// Gets or sets the license identifier, mapped to the Lua field <c>license</c>.
-    /// </summary>
-    [LuaMember("license")]
-    public string LuaI_License
-    {
-        get => License;
-        set => License = value;
+        get => Meta.Name;
+        set => Meta.Name = value;
     }
 
     /// <summary>
@@ -66,8 +40,48 @@ public partial class PackageMetaLuaObject : PackageMeta
     [LuaMember("version")]
     public string LuaI_Version
     {
-        get => Version.ToString();
-        set => Version = new(value);
+        get => Meta.Version.ToString();
+        set => Meta.Version = new(value);
+    }
+
+    /// <summary>
+    /// Gets or sets the package description, mapped to the Lua field <c>description</c>.
+    /// </summary>
+    [LuaMember("description")]
+    public string LuaI_Description
+    {
+        get => Meta.Description;
+        set => Meta.Description = value;
+    }
+
+    /// <summary>
+    /// Gets or sets the upstream URL, mapped to the Lua field <c>upstream_url</c>.
+    /// </summary>
+    [LuaMember("upstream_url")]
+    public string LuaI_UpstreamUrl
+    {
+        get => Meta.UpstreamUrl;
+        set => Meta.UpstreamUrl = value;
+    }
+
+    /// <summary>
+    /// Gets or sets the package category, mapped to the Lua field <c>category</c>.
+    /// </summary>
+    [LuaMember("category")]
+    public string LuaI_Category
+    {
+        get => Meta.Category;
+        set => Meta.Category = value;
+    }
+
+    /// <summary>
+    /// Gets or sets the license identifier, mapped to the Lua field <c>license</c>.
+    /// </summary>
+    [LuaMember("license")]
+    public string LuaI_License
+    {
+        get => Meta.License;
+        set => Meta.License = value;
     }
 
     /// <summary>
@@ -76,8 +90,8 @@ public partial class PackageMetaLuaObject : PackageMeta
     [LuaMember("release")]
     public int LuaI_Release
     {
-        get => Release;
-        set => Release = value;
+        get => Meta.Release;
+        set => Meta.Release = value;
     }
 
     /// <summary>
@@ -86,8 +100,8 @@ public partial class PackageMetaLuaObject : PackageMeta
     [LuaMember("epoch")]
     public int LuaI_Epoch
     {
-        get => Epoch;
-        set => Epoch = value;
+        get => Meta.Epoch;
+        set => Meta.Epoch = value;
     }
 
     /// <summary>
@@ -96,23 +110,8 @@ public partial class PackageMetaLuaObject : PackageMeta
     [LuaMember("groups")]
     public LuaTable LuaI_Groups
     {
-        get
-        {
-            LuaTable table = [];
-            for (int i = 0; i < Groups.Count; i++)
-            {
-                table[i + 1] = Groups[i].ToString();
-            }
-            return table;
-        }
-        set
-        {
-            Groups = [];
-            foreach (var item in value)
-            {
-                Groups.Add(item.Value.Read<string>());
-            }
-        }
+        get => LuaTableHelper.ListToLuaArray(Meta.Groups);
+        set => Meta.Groups = LuaTableHelper.LuaArrayToList<string>(value);
     }
 
     /// <summary>
@@ -121,23 +120,8 @@ public partial class PackageMetaLuaObject : PackageMeta
     [LuaMember("provides")]
     public LuaTable LuaI_Provides
     {
-        get
-        {
-            LuaTable table = [];
-            foreach (var item in Provides)
-            {
-                table[item.Key] = item.Value.ToString();
-            }
-            return table;
-        }
-        set
-        {
-            Provides = [];
-            foreach (var item in value)
-            {
-                Provides.Add(item.Key.Read<string>(), new(item.Value.Read<string>()));
-            }
-        }
+        get => LuaTableHelper.DictionaryToLuaTable(Meta.Provides, v => v.ToString());
+        set => Meta.Provides = LuaTableHelper.LuaTableToDictionary(value, s => new VersionIdentifier(s));
     }
 
     /// <summary>
@@ -146,23 +130,8 @@ public partial class PackageMetaLuaObject : PackageMeta
     [LuaMember("depends")]
     public LuaTable LuaI_Depends
     {
-        get
-        {
-            LuaTable table = [];
-            foreach (var item in Depends)
-            {
-                table[item.Key] = item.Value.ToString();
-            }
-            return table;
-        }
-        set
-        {
-            Depends = [];
-            foreach (var item in value)
-            {
-                Depends.Add(item.Key.Read<string>(), new(item.Value.Read<string>()));
-            }
-        }
+        get => LuaTableHelper.DictionaryToLuaTable(Meta.Depends, v => v.ToString());
+        set => Meta.Depends = LuaTableHelper.LuaTableToDictionary(value, s => new VersionRange(s));
     }
 
     /// <summary>
@@ -171,23 +140,8 @@ public partial class PackageMetaLuaObject : PackageMeta
     [LuaMember("conflicts")]
     public LuaTable LuaI_Conflicts
     {
-        get
-        {
-            LuaTable table = [];
-            foreach (var item in Conflicts)
-            {
-                table[item.Key] = item.Value.ToString();
-            }
-            return table;
-        }
-        set
-        {
-            Conflicts = [];
-            foreach (var item in value)
-            {
-                Conflicts.Add(item.Key.Read<string>(), new(item.Value.Read<string>()));
-            }
-        }
+        get => LuaTableHelper.DictionaryToLuaTable(Meta.Conflicts, v => v.ToString());
+        set => Meta.Conflicts = LuaTableHelper.LuaTableToDictionary(value, s => new VersionRange(s));
     }
 
     /// <summary>
@@ -196,23 +150,8 @@ public partial class PackageMetaLuaObject : PackageMeta
     [LuaMember("replaces")]
     public LuaTable LuaI_Replaces
     {
-        get
-        {
-            LuaTable table = [];
-            foreach (var item in Replaces)
-            {
-                table[item.Key] = item.Value.ToString();
-            }
-            return table;
-        }
-        set
-        {
-            Replaces = [];
-            foreach (var item in value)
-            {
-                Replaces.Add(item.Key.Read<string>(), new(item.Value.Read<string>()));
-            }
-        }
+        get => LuaTableHelper.DictionaryToLuaTable(Meta.Replaces, v => v.ToString());
+        set => Meta.Replaces = LuaTableHelper.LuaTableToDictionary(value, s => new VersionRange(s));
     }
 
     /// <summary>
@@ -221,40 +160,30 @@ public partial class PackageMetaLuaObject : PackageMeta
     [LuaMember("recommends")]
     public LuaTable LuaI_Recommends
     {
-        get
-        {
-            LuaTable table = [];
-            foreach (var item in Recommends)
-            {
-                table[item.Key] = item.Value;
-            }
-            return table;
-        }
-        set
-        {
-            Recommends = [];
-            foreach (var item in value)
-            {
-                Recommends.Add(item.Key.Read<string>(), item.Value.Read<string>());
-            }
-        }
+        get => LuaTableHelper.DictionaryToLuaTable(Meta.Recommends, v => v);
+        set => Meta.Recommends = LuaTableHelper.LuaTableToDictionary(value, s => s);
     }
 
     /// <summary>
     /// Creates a new <see cref="PackageMetaLuaObject"/> from a Lua table by reading each known field.
     /// </summary>
     /// <param name="table">The Lua table containing package metadata.</param>
-    /// <returns>A populated <see cref="PackageMetaLuaObject"/> instance.</returns>
+    /// <returns>A populated <see cref="PackageMetaLuaObject"/> instance wrapping the parsed <see cref="PackageMeta"/>.</returns>
     public static PackageMetaLuaObject FromLuaTable(LuaTable table)
     {
-        return new()
+        PackageMeta meta = new()    // placeholder values
         {
-            Name = table["name"].Read<string>(),
-            Description = table["description"].Read<string>(),
-            UpstreamUrl = table["upstream_url"].Read<string>(),
-            Category = table["category"].Read<string>(),
-            License = table["license"].Read<string>(),
-            Version = new(table["version"].Read<string>()),
+            Name = "a",
+            Version = new("1")
+        };
+        return new PackageMetaLuaObject(meta)
+        {
+            LuaI_Name = table["name"].Read<string>(),
+            LuaI_Version = table["version"].Read<string>(),
+            LuaI_Description = table["description"].Read<string>(),
+            LuaI_UpstreamUrl = table["upstream_url"].Read<string>(),
+            LuaI_Category = table["category"].Read<string>(),
+            LuaI_License = table["license"].Read<string>(),
             LuaI_Release = table["release"].Read<int>(),
             LuaI_Epoch = table["epoch"].Read<int>(),
             LuaI_Groups = table["groups"].Read<LuaTable>(),
@@ -274,14 +203,14 @@ public partial class PackageMetaLuaObject : PackageMeta
     {
         return new()
         {
-            ["name"] = Name,
-            ["description"] = Description,
-            ["upstream_url"] = UpstreamUrl,
-            ["category"] = Category,
-            ["license"] = License,
-            ["version"] = Version.ToString(),
-            ["release"] = Release,
-            ["epoch"] = Epoch,
+            ["name"] = LuaI_Name,
+            ["version"] = LuaI_Version,
+            ["description"] = LuaI_Description,
+            ["upstream_url"] = LuaI_UpstreamUrl,
+            ["category"] = LuaI_Category,
+            ["license"] = LuaI_License,
+            ["release"] = LuaI_Release,
+            ["epoch"] = LuaI_Epoch,
             ["groups"] = LuaI_Groups,
             ["provides"] = LuaI_Provides,
             ["depends"] = LuaI_Depends,

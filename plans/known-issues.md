@@ -72,16 +72,7 @@ found by AI. human checked this and removed false alarms. already fixed issues h
 
 - ~~DES-P1: `FetchSourceAsync` does three distinct operations in one method~~
 
-#### DES-P2: Lua object wrappers inherit from domain models rather than composing
-
-**File:** `PackageCraftRecipeLuaObject.cs:10, PackageMetaLuaObject.cs:11`
-
-```csharp
-public partial class PackageCraftRecipeLuaObject : PackageCraftRecipe
-public partial class PackageMetaLuaObject : PackageMeta
-```
-
-Inheritance couples the Lua serialization layer to the domain model. Properties like `LuaI_Name` pollute the type hierarchy. While `JsonSerializer.Serialize(Recipe.Meta)` uses the compile-time type `PackageMeta` (excluding LuaI\_ properties), this is fragile — if someone later uses `Serialize<object>(...)` or a runtime-typed serializer, Lua properties appear in the output. Composition would be cleaner.
+- ~~DES-P2: Lua object wrappers inherit from domain models rather than composing~~
 
 #### DES-P3: `StandardOutput`/`StandardError` are properties that allocate
 
@@ -89,34 +80,11 @@ Inheritance couples the Lua serialization layer to the domain model. Properties 
 
 Each access creates a new `StreamReader` wrapping a new `MemoryStream`. Callers are unlikely to dispose the returned `StreamReader`. Properties should not have side effects like allocations; use methods (e.g., `GetStandardOutput()`).
 
-#### DES-P4: Async pipeline methods have undocumented ordering dependencies
-
-**File:** `PackageBuilder.cs`
-
-- `InitializeDirectories()` must be called before `FetchSourceAsync()` — no guard
-- `FetchSourceAsync()` must be called before `VerifySourceAsync()` for same index — no guard
-- `InvokeGetVersionAsync()` must be called before `CompressPackageAsync()` — mutation order dependency
-- `CompressPackageAsync()` writes meta regardless of whether package phases ran
-
 ### DRY Violations
 
-#### DRY-1: Dict-to-Lua-array and Lua-array-to-dict patterns repeated 6 times
+- ~~DRY-1: Dict-to-Lua-array and Lua-array-to-dict patterns repeated 6 times~~
 
-**File:** `PackageMetaLuaObject.cs`, `PackageCraftRecipeLuaObject.cs`
-
-`LuaI_Depends`, `LuaI_Conflicts`, `LuaI_Replaces`, `LuaI_Provides` (in PackageMetaLuaObject) plus `LuaI_Sources` and `LuaI_SourceChecksums` (in PackageCraftRecipeLuaObject) all implement the same 1-indexed Lua-array ↔ C# collection pattern. A helper method pair would eliminate ~80 lines.
-
-#### DRY-2: Five Lua function property wrappers are identical
-
-**File:** `PackageCraftRecipeLuaObject.cs:86-132`
-
-`Prepare`, `GetVersion`, `Build`, `Check`, `Package` properties share the exact same getter/setter pattern differing only in the backing field name. A helper or code generator would help.
-
-#### DRY-3: `GitCall` and `ShellExecute` share 80% identical code
-
-**File:** `GlobalFunctions.cs:93-177`
-
-Both create `ProcessStartInfo`, configure redirection, wire up output events, start, and wait. Only `FileName` and `Arguments` differ. Extract a `RunProcessAsync` helper.
+- ~~DRY-3: `GitCall` and `ShellExecute` share 80% identical code~~
 
 #### DRY-4: `RestrictedFilesysLuaLibrary` and `UnsafeFilesysLuaLibrary` duplicate all method signatures
 
@@ -124,24 +92,7 @@ Both create `ProcessStartInfo`, configure redirection, wire up output events, st
 
 All four operations (Move, Copy, Delete, CreateDirectory) have identical method signatures. The only difference is the path assertion step. Use the Template Method pattern with a virtual `AssertOperation(string source, string dest)` in the base class (no-op in unsafe, restrictive in restricted).
 
-#### DRY-5: `DownloadConfiguration` defined in both `PackageBuilder.cs` and `PackageBuilderFactory.cs`
-
-**File:** `PackageBuilder.cs:28-31, PackageBuilderFactory.cs:17-21`
-
-Same `{ ChunkCount = 8, ParallelDownload = true }` config defined twice.
-
-### Atomic Method Design Violations
-
-1. **`FetchSourceAsync(int index)`** — fetches by HTTP, git, or file copy. Three distinct source types.
-2. **`CompressPackageAsync()`** — writes meta JSON + creates ZIP. Two distinct operations.
-3. **`CreateBuilder()`** — creates Lua state + registers filesys lib + creates builder + creates GlobalFunctions + registers them. Five distinct operations.
-4. **`LoadRecipeAsync(string script)`** — disposes old state + creates new state + executes Lua + extracts recipe. Four operations.
-
-### Async Pipeline Issues
-
-- No enforcement that `FetchSourceAsync(index)` is called before `VerifySourceAsync(index)`. Calling out of order silently returns false.
-- No enforcement that `InitializeDirectories()` is called before `FetchSourceAsync()`. Without it, directory-not-found errors occur.
-- `CompressPackageAsync()` does not verify that package phases ran successfully. Missing a phase silently produces incomplete packages.
+- ~~DRY-5: `DownloadConfiguration` defined in both `PackageBuilder.cs` and `PackageBuilderFactory.cs`~~
 
 ---
 

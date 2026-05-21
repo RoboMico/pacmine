@@ -206,7 +206,7 @@ public class PackageBuilderFactory : IDisposable
         // remain valid throughout the build pipeline.
         _sharedLuaState = LuaState.Create();
         var result = (await _sharedLuaState.DoStringAsync(script)).First().Read<LuaTable>();
-        Recipe = PackageCraftRecipeLuaObject.FromLuaTable(result);
+        Recipe = PackageCraftRecipeLuaObject.FromLuaTable(result).Recipe;
         return Recipe;
     }
 

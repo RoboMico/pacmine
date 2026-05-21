@@ -11,17 +11,17 @@ public class LuaObjectConversionTests
     [Fact]
     public void PackageMetaLuaObject_ToLuaTable_ContainsAllFields()
     {
-        var pmo = new PackageMetaLuaObject
+        var pmo = new PackageMetaLuaObject(new PackageMeta
         {
             Name = "test-pkg",
+            Version = new VersionIdentifier("1.2.3"),
             Description = "A test",
             UpstreamUrl = "https://example.com",
             Category = "mod",
             License = "MIT",
-            Version = new VersionIdentifier("1.2.3"),
             Release = 2,
             Epoch = 1
-        };
+        });
 
         var table = pmo.ToLuaTable();
 
@@ -38,35 +38,35 @@ public class LuaObjectConversionTests
     [Fact]
     public void PackageMetaLuaObject_FromLuaTable_Roundtrips()
     {
-        var original = new PackageMetaLuaObject
+        var original = new PackageMetaLuaObject(new PackageMeta
         {
             Name = "test-pkg",
+            Version = new VersionIdentifier("2.0.0"),
             Description = "A test package",
             UpstreamUrl = "https://example.com/pkg",
             Category = "mod",
             License = "MIT",
-            Version = new VersionIdentifier("2.0.0"),
             Release = 3,
             Epoch = 0
-        };
+        });
 
         var table = original.ToLuaTable();
         var restored = PackageMetaLuaObject.FromLuaTable(table);
 
-        Assert.Equal(original.Name, restored.Name);
-        Assert.Equal(original.Description, restored.Description);
-        Assert.Equal(original.UpstreamUrl, restored.UpstreamUrl);
-        Assert.Equal(original.Category, restored.Category);
-        Assert.Equal(original.License, restored.License);
-        Assert.Equal(original.Version.RawString, restored.Version.RawString);
-        Assert.Equal(original.Release, restored.Release);
-        Assert.Equal(original.Epoch, restored.Epoch);
+        Assert.Equal(original.Meta.Name, restored.Meta.Name);
+        Assert.Equal(original.Meta.Description, restored.Meta.Description);
+        Assert.Equal(original.Meta.UpstreamUrl, restored.Meta.UpstreamUrl);
+        Assert.Equal(original.Meta.Category, restored.Meta.Category);
+        Assert.Equal(original.Meta.License, restored.Meta.License);
+        Assert.Equal(original.Meta.Version.RawString, restored.Meta.Version.RawString);
+        Assert.Equal(original.Meta.Release, restored.Meta.Release);
+        Assert.Equal(original.Meta.Epoch, restored.Meta.Epoch);
     }
 
     [Fact]
     public void PackageMetaLuaObject_WithDepends_Roundtrips()
     {
-        var original = new PackageMetaLuaObject
+        var original = new PackageMetaLuaObject(new PackageMeta
         {
             Name = "with-deps",
             Version = new VersionIdentifier("1.0.0"),
@@ -75,20 +75,20 @@ public class LuaObjectConversionTests
                 { "dep-a", new VersionRange("^1.0.0") },
                 { "dep-b", new VersionRange("~2.0.0") }
             }
-        };
+        });
 
         var table = original.ToLuaTable();
         var restored = PackageMetaLuaObject.FromLuaTable(table);
 
-        Assert.Equal(2, restored.Depends.Count);
-        Assert.True(restored.Depends.ContainsKey("dep-a"));
-        Assert.True(restored.Depends.ContainsKey("dep-b"));
+        Assert.Equal(2, restored.Meta.Depends.Count);
+        Assert.True(restored.Meta.Depends.ContainsKey("dep-a"));
+        Assert.True(restored.Meta.Depends.ContainsKey("dep-b"));
     }
 
     [Fact]
     public void PackageMetaLuaObject_WithConflicts_Roundtrips()
     {
-        var original = new PackageMetaLuaObject
+        var original = new PackageMetaLuaObject(new PackageMeta
         {
             Name = "conflicting",
             Version = new VersionIdentifier("1.0.0"),
@@ -96,13 +96,13 @@ public class LuaObjectConversionTests
             {
                 { "other-pkg", new VersionRange("^1.0.0") }
             }
-        };
+        });
 
         var table = original.ToLuaTable();
         var restored = PackageMetaLuaObject.FromLuaTable(table);
 
-        Assert.Single(restored.Conflicts);
-        Assert.True(restored.Conflicts.ContainsKey("other-pkg"));
+        Assert.Single(restored.Meta.Conflicts);
+        Assert.True(restored.Meta.Conflicts.ContainsKey("other-pkg"));
     }
 
     // ── PackageCraftRecipeLuaObject ──────────────────────────────────────
@@ -110,17 +110,17 @@ public class LuaObjectConversionTests
     [Fact]
     public void PackageCraftRecipeLuaObject_ToLuaTable_ContainsRecipeFields()
     {
-        var recipe = new PackageCraftRecipeLuaObject
+        var recipe = new PackageCraftRecipeLuaObject(new PackageCraftRecipe
         {
             Protocol = "1.0",
-            Meta = new PackageMetaLuaObject
+            Meta = new PackageMeta
             {
                 Name = "recipe-pkg",
                 Version = new VersionIdentifier("1.0.0")
             },
             Sources = ["src1.tar.gz", "src2.patch"],
             SourceChecksums = ["SKIP", "sha256:abc123"]
-        };
+        });
 
         var table = recipe.ToLuaTable();
 
@@ -132,10 +132,10 @@ public class LuaObjectConversionTests
     [Fact]
     public void PackageCraftRecipeLuaObject_FromLuaTable_Roundtrips()
     {
-        var original = new PackageCraftRecipeLuaObject
+        var original = new PackageCraftRecipeLuaObject(new PackageCraftRecipe
         {
             Protocol = "2.0",
-            Meta = new PackageMetaLuaObject
+            Meta = new PackageMeta
             {
                 Name = "test-recipe",
                 Version = new VersionIdentifier("3.0.0")
@@ -144,29 +144,29 @@ public class LuaObjectConversionTests
             SourceChecksums = ["sha256:def456"],
             Prepare = null,
             Build = null
-        };
+        });
 
         var table = original.ToLuaTable();
         var restored = PackageCraftRecipeLuaObject.FromLuaTable(table);
 
-        Assert.Equal(original.Protocol, restored.Protocol);
-        Assert.Equal(original.Meta.Name, restored.Meta.Name);
-        Assert.Equal(original.Sources.Count, restored.Sources.Count);
-        Assert.Equal(original.SourceChecksums.Count, restored.SourceChecksums.Count);
+        Assert.Equal(original.Recipe.Protocol, restored.Recipe.Protocol);
+        Assert.Equal(original.Recipe.Meta.Name, restored.Recipe.Meta.Name);
+        Assert.Equal(original.Recipe.Sources.Count, restored.Recipe.Sources.Count);
+        Assert.Equal(original.Recipe.SourceChecksums.Count, restored.Recipe.SourceChecksums.Count);
     }
 
     [Fact]
     public void PackageCraftRecipeLuaObject_NullLuaFunctions_AreNil()
     {
-        var recipe = new PackageCraftRecipeLuaObject
+        var recipe = new PackageCraftRecipeLuaObject(new PackageCraftRecipe
         {
             Protocol = "1.0",
-            Meta = new PackageMetaLuaObject
+            Meta = new PackageMeta
             {
                 Name = "no-funcs",
                 Version = new VersionIdentifier("1.0.0")
             }
-        };
+        });
 
         var table = recipe.ToLuaTable();
 
