@@ -7,6 +7,8 @@ namespace Pacmine.Core;
 /// Represents a version identifier compliant with Semantic Versioning 2.0.
 /// Wraps <see cref="SemVersion"/> internally for parsing and comparison,
 /// with a fallback to raw string comparison for non-SemVer strings.
+/// A prefix of "v" is allowed and the patch segment is optional, so "1.12",
+/// "v2.3.4", and "v6.0" are all valid.
 /// Comparison uses <see cref="SemVersion.ComparePrecedenceTo(SemVersion)"/>
 /// when both sides are valid <see cref="SemVersion"/>, with ordinal
 /// <see cref="string.Compare(string, string, StringComparison)"/> as a tiebreaker
@@ -22,6 +24,7 @@ public class VersionIdentifier : IComparable<VersionIdentifier>, IEquatable<Vers
 
     private readonly string _raw;
     private readonly SemVersion? _semver;
+    private readonly string[] _segments;
 
     /// <summary>
     /// Initializes a new instance of the <see cref="VersionIdentifier"/> class with the specified version string.
@@ -31,6 +34,25 @@ public class VersionIdentifier : IComparable<VersionIdentifier>, IEquatable<Vers
     {
         _raw = version;
         SemVersion.TryParse(version, ParseStyles, out _semver);
+
+        if (_semver == null)
+        {
+            _segments = [_raw];
+        }
+        else
+        {
+            var list = new List<string>
+            {
+                _semver.Major.ToString(),
+                _semver.Minor.ToString(),
+                _semver.Patch.ToString()
+            };
+            foreach (var id in _semver.PrereleaseIdentifiers)
+                list.Add(id.Value);
+            foreach (var id in _semver.MetadataIdentifiers)
+                list.Add(id.Value);
+            _segments = list.ToArray();
+        }
     }
 
     /// <summary>
@@ -48,24 +70,7 @@ public class VersionIdentifier : IComparable<VersionIdentifier>, IEquatable<Vers
     /// Gets the segments of the version string. When parsed as SemVer, this returns
     /// [Major, Minor, Patch, ...PrereleaseIdentifiers]; otherwise returns the raw string as a single segment.
     /// </summary>
-    public string[] Segments
-    {
-        get
-        {
-            if (_semver == null)
-                return [_raw];
-
-            var list = new List<string>
-            {
-                _semver.Major.ToString(),
-                _semver.Minor.ToString(),
-                _semver.Patch.ToString()
-            };
-            foreach (var id in _semver.PrereleaseIdentifiers)
-                list.Add(id.Value);
-            return list.ToArray();
-        }
-    }
+    public string[] Segments => _segments;
 
     /// <summary>
     /// Compares this instance to another <see cref="VersionIdentifier"/> using <see cref="SemVersion.ComparePrecedenceTo(SemVersion)"/>

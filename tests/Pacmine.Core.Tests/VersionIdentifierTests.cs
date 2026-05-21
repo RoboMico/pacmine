@@ -7,44 +7,43 @@ public class VersionIdentifierTests
 {
     // ── Parsing ──────────────────────────────────────────────────────────
 
-    [Fact]
-    public void Parse_ValidSemVer_StoresParsedVersion()
+    [Theory]
+    [InlineData("1.21.11")]
+    [InlineData("26.1.2")]
+    [InlineData("26.2-snapshot.8")]
+    [InlineData("26.1.1-rc.1")]
+    [InlineData("1.20.5-pre.1")]
+    [InlineData("1.2.3+build.1")]
+    [InlineData("1.2.3-beta.1+build.1")]
+    [InlineData("v2.3.4-beta.1+build.1")]
+    [InlineData("v2.3.4+build.1")]
+    [InlineData("4.0")]
+    [InlineData("v0.1")]
+    [InlineData("v0.1-alpha.1")]
+    [InlineData("v4.5+mc.26.2")]
+    [InlineData("v59.25004-snapshot.11+build.114514")]
+    public void Parse_SemVer_ParsesCorrectly(string version)
     {
-        var vi = new VersionIdentifier("1.2.3");
-        Assert.Equal("1.2.3", vi.RawString);
+        var vi = new VersionIdentifier(version);
         Assert.NotNull(vi.SemVersion);
+        Assert.Equal(version, vi.RawString);
     }
 
-    [Fact]
-    public void Parse_SemVerWithPrerelease_ParsesCorrectly()
+    [Theory]
+    [InlineData("25w46a")]
+    [InlineData("13w12~")]
+    [InlineData("2.0.2.6")]
+    [InlineData("20w14∞")]
+    [InlineData("22w13oneblockatatime")]
+    [InlineData("23w13a_or_b")]
+    [InlineData("24w14potato")]
+    [InlineData("25w14craftmine")]
+    [InlineData("1")]
+    [InlineData("combat test 8")]
+    public void Parse_NonSemVerString_FallsBackToRaw(string version)
     {
-        var vi = new VersionIdentifier("1.2.3-beta.1");
-        Assert.NotNull(vi.SemVersion);
-        Assert.Equal("1.2.3-beta.1", vi.RawString);
-    }
-
-    [Fact]
-    public void Parse_SemVerWithPrefixV_ParsesCorrectly()
-    {
-        var vi = new VersionIdentifier("v1.2.3");
-        Assert.NotNull(vi.SemVersion);
-        Assert.Equal("v1.2.3", vi.RawString);
-    }
-
-    [Fact]
-    public void Parse_NonSemVerString_FallsBackToRaw()
-    {
-        // "25w14a" is a Minecraft snapshot version — not valid SemVer
-        var vi = new VersionIdentifier("25w14a");
-        Assert.Equal("25w14a", vi.RawString);
-        Assert.Null(vi.SemVersion);
-    }
-
-    [Fact]
-    public void Parse_ArbitraryString_FallsBackToRaw()
-    {
-        var vi = new VersionIdentifier("random-version-string");
-        Assert.Equal("random-version-string", vi.RawString);
+        var vi = new VersionIdentifier(version);
+        Assert.Equal(version, vi.RawString);
         Assert.Null(vi.SemVersion);
     }
 

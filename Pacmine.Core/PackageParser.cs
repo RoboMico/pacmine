@@ -17,7 +17,7 @@ public static class PackageParser
     /// Reads the meta info from the package archive.
     /// </summary>
     /// <param name="archive">The package archive.</param>
-    /// <returns>The meta info, or <c>null</c> if meta file is missing or corrupted.</returns>
+    /// <returns>The meta info, or <c>null</c> if meta file is missing.</returns>
     public static PackageMeta? GetMeta(ZipArchive archive)
     {
         var metaEntry = archive.GetEntry(META_FILE_NAME);

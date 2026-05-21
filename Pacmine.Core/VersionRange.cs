@@ -9,7 +9,11 @@ namespace Pacmine.Core;
 ///   <item><description><b>SemVer compatible</b> — If the provided string is a valid npm-style
 ///   version range (supporting <c>^</c>, <c>~</c>, <c>&gt;=</c>, <c>&gt;</c>, <c>&lt;=</c>,
 ///   <c>&lt;</c>, exact match, <c>x</c>, hyphen ranges, and union <c>||</c>), the range is
-///   evaluated using semver rules via <see cref="SemVersionRange"/>.</description></item>
+///   evaluated using semver rules via <see cref="SemVersionRange"/>.
+///   <br/><b>Prerelease handling (npm standard):</b> Prerelease versions (e.g. <c>1.0.0-alpha</c>)
+///   are excluded from the range unless the range expression itself contains a prerelease
+///   identifier. For example, <c>^1.0.0</c> matches <c>1.2.3</c> but not <c>1.2.3-beta</c>;
+///   <c>^1.0.0-alpha</c> matches both <c>1.0.0-beta</c> and <c>1.2.3-rc.1</c>.</description></item>
 ///   <item><description><b>Any</b> — The string <c>"*"</c> matches any version, regardless of
 ///   whether the <see cref="VersionIdentifier"/> is semver-compatible or not.</description></item>
 ///   <item><description><b>Literal match</b> — If the string is not a valid npm-style version range
@@ -30,7 +34,11 @@ public class VersionRange
     /// <c>"*"</c> becomes Any mode; valid npm-style ranges become SemVer mode;
     /// everything else becomes literal-match mode.
     /// </summary>
-    /// <param name="range">The version range expression string.</param>
+    /// <param name="range">The version range expression string.
+    /// <br/><b>Prerelease note:</b> In SemVer mode, prerelease versions are matched using
+    /// standard npm rules — they are excluded unless the range expression itself specifies a
+    /// prerelease identifier. For example, <c>^1.0.0</c> does <i>not</i> match <c>1.0.0-beta</c>,
+    /// but <c>^1.0.0-alpha</c> does.</param>
     public VersionRange(string range)
     {
         if (range == "*")

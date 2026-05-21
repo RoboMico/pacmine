@@ -46,10 +46,10 @@ Happy-path test coverage is good. But across all modules, core pipeline methods 
 | # | Severity | Location | Issue |
 |---|----------|----------|-------|
 | ~~C1~~ | Fixed | `VersionIdentifier.cs:73,151` | `CompareTo` can return `0` while `Equals` returns `false` — violates `IComparable<T>` contract. Will cause incorrect behavior in `SortedSet<T>` / `SortedDictionary<TKey,TValue>`. |
-| C2 | **MEDIUM** | `PackageParser.cs:21,28` | XML doc states `GetMeta` returns `null` for corrupt JSON, but it actually throws `JsonException`. |
-| C3 | **MEDIUM** | `VersionRange.cs:40` | Constructor hardcodes `includeAllPrerelease: false` — this major semantic behavior is undocumented. |
-| C4 | **LOW** | `PackageMeta.cs:46,51,56,61` | Inconsistent sentinel default strings: `"No description"`, `"N/A"`, `""`. Should be consistent (empty string or null) in the domain model. |
-| C5 | **LOW** | `VersionIdentifier.cs:48` | `Segments` getter allocates a new `List<string>` per call. Should be cached. |
+| ~~C2~~ | Fixed | `PackageParser.cs:21,28` | XML doc states `GetMeta` returns `null` for corrupt JSON, but it actually throws `JsonException`. |
+| ~~C3~~ | Fixed | `VersionRange.cs:40` | Constructor hardcodes `includeAllPrerelease: false` — this major semantic behavior is undocumented. |
+| ~~C4~~ | Ignored | `PackageMeta.cs:46,51,56,61` | Inconsistent sentinel default strings: `"No description"`, `"N/A"`, `""`. Should be consistent (empty string or null) in the domain model. |
+| ~~C5~~ | Fixed | `VersionIdentifier.cs:48` | `Segments` getter allocates a new `List<string>` per call. Should be cached. |
 
 **Test Gaps:**
 - No test for prerelease exclusion in SemVer range matching
