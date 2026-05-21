@@ -624,7 +624,8 @@ public class PacmineEnvironment : IDisposable
 
             // Compute SHA256 checksum
             using var sha256 = SHA256.Create();
-            var hashBytes = sha256.ComputeHash(sourceFile.OpenRead());
+            using var fs = sourceFile.OpenRead();
+            var hashBytes = sha256.ComputeHash(fs);
             var checksum = Convert.ToHexString(hashBytes).ToLowerInvariant();
 
             fileList[relativePath] = checksum;

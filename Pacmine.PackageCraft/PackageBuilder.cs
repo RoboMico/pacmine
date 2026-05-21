@@ -301,7 +301,8 @@ public class PackageBuilder
 
         if (entry is FileInfo file)
         {
-            var hash = hashAlgo.ComputeHash(File.ReadAllBytes(file.FullName));
+            using var fs = file.OpenRead();
+            var hash = hashAlgo.ComputeHash(fs);
             return Convert.ToHexString(hash).Equals(checksum, StringComparison.OrdinalIgnoreCase);
         }
 

@@ -60,15 +60,7 @@ found by AI. human checked this and removed false alarms. already fixed issues h
 
 - ~~BUG-P7: No timeout on git and shell processes~~
 
-#### BUG-P8: `VerifySourceAsync` loads entire file into memory
-
-**File:** `PackageBuilder.cs:304`
-
-```csharp
-hashAlgo.ComputeHash(File.ReadAllBytes(file.FullName));
-```
-
-For large source files (game assets can be gigabytes), this causes OutOfMemoryException. Use `ComputeHash(Stream)` with `File.OpenRead`.
+- ~~BUG-P8: `VerifySourceAsync` loads entire file into memory~~
 
 #### BUG-P9: `CompressPackageAsync` writes meta JSON then ZIPs — partial failure leaves corrupt state
 
