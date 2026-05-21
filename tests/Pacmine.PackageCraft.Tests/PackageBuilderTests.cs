@@ -85,10 +85,12 @@ public class PackageBuilderTests
     // ── PackageBuilderFactory: CreateBuilder validation ──────────────────
 
     [Fact]
-    public void Factory_CreateBuilder_MissingSourceDirectory_Throws()
+    public void Factory_CreateBuilder_MissingWorkingDirectory_Throws()
     {
         var factory = new PackageBuilderFactory();
-        factory.ConfigurePackageDirectory("/tmp/pkg");
+        factory.ConfigureSourceDirectory("/tmp/boo/src");
+        factory.ConfigurePackageDirectory("/tmp/boo/pkg");
+        factory.ConfigureOutputDirectory("/tmp/boo/out");
         SetFactoryRecipe(factory, new PackageCraftRecipe
         {
             Protocol = "1.0",
@@ -98,24 +100,7 @@ public class PackageBuilderTests
         var ex = Assert.Throws<InvalidOperationException>(() =>
             factory.CreateBuilder());
 
-        Assert.Contains("SourceDirectory", ex.Message);
-    }
-
-    [Fact]
-    public void Factory_CreateBuilder_MissingPackageDirectory_Throws()
-    {
-        var factory = new PackageBuilderFactory();
-        factory.ConfigureSourceDirectory("/tmp/src");
-        SetFactoryRecipe(factory, new PackageCraftRecipe
-        {
-            Protocol = "1.0",
-            Meta = new() { Name = "test", Version = new("1.0.0") }
-        });
-
-        var ex = Assert.Throws<InvalidOperationException>(() =>
-            factory.CreateBuilder());
-
-        Assert.Contains("PackageDirectory", ex.Message);
+        Assert.Contains("WorkingDirectory", ex.Message);
     }
 
     // ── PackageBuilder: Direct construction ──────────────────────────────

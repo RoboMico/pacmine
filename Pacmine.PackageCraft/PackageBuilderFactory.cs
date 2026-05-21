@@ -221,12 +221,16 @@ public class PackageBuilderFactory : IDisposable
     /// or when no recipe has been loaded/provided.</exception>
     public PackageBuilder CreateBuilder()
     {
+        if (WorkingDirectory == null)
+            throw new InvalidOperationException("WorkingDirectory is not configured. Call ConfigureWorkingDirectory first.");
         if (SourceDirectory == null)
             throw new InvalidOperationException("SourceDirectory is not configured. Call ConfigureWorkingDirectory or ConfigureSourceDirectory first.");
         if (PackageDirectory == null)
             throw new InvalidOperationException("PackageDirectory is not configured. Call ConfigureWorkingDirectory or ConfigurePackageDirectory first.");
+        if (OutputDirectory == null)
+            throw new InvalidOperationException("OutputDirectory is not configured. Call ConfigureWorkingDirectory or ConfigureOutputDirectory first.");
         if (Recipe == null)
-            throw new InvalidOperationException("No recipe has been loaded. Call LoadRecipeAsync or ConfigureRecipe first.");
+            throw new InvalidOperationException("No recipe has been loaded. Call LoadRecipeAsync first.");
 
         var recipe = Recipe;
         Recipe = null; // consume the recipe

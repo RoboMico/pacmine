@@ -39,10 +39,10 @@ public class PackageBuilder
     internal PackageBuilder(
         LuaState luaState,
         PackageCraftRecipe recipe,
-        DirectoryInfo? workingDirectory,
-        DirectoryInfo? sourceDirectory,
-        DirectoryInfo? packageDirectory,
-        DirectoryInfo? outputDirectory,
+        DirectoryInfo workingDirectory,
+        DirectoryInfo sourceDirectory,
+        DirectoryInfo packageDirectory,
+        DirectoryInfo outputDirectory,
         string? gitCommand,
         DownloadConfiguration downloadConfig)
     {
@@ -70,22 +70,22 @@ public class PackageBuilder
     /// <summary>
     /// Gets the working directory for the build.
     /// </summary>
-    public DirectoryInfo? WorkingDirectory { get; }
+    public DirectoryInfo WorkingDirectory { get; }
 
     /// <summary>
     /// Gets the source directory where downloaded or copied sources are placed.
     /// </summary>
-    public DirectoryInfo? SourceDirectory { get; }
+    public DirectoryInfo SourceDirectory { get; }
 
     /// <summary>
     /// Gets the package staging directory where built files are assembled.
     /// </summary>
-    public DirectoryInfo? PackageDirectory { get; }
+    public DirectoryInfo PackageDirectory { get; }
 
     /// <summary>
     /// Gets the output directory where the final package archive is written.
     /// </summary>
-    public DirectoryInfo? OutputDirectory { get; }
+    public DirectoryInfo OutputDirectory { get; }
 
     /// <summary>
     /// Gets the recipe that defines the build configuration.
