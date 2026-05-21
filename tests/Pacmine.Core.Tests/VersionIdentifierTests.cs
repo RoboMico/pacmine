@@ -97,6 +97,63 @@ public class VersionIdentifierTests
         Assert.Equal(expected, result);
     }
 
+    [Theory]
+    [InlineData("1.0.0", "v1.0.0", -1)]          // SemVer-equivalent, '1' < 'v'
+    [InlineData("v1.0.0", "1.0.0", 1)]           // SemVer-equivalent, 'v' > '1'
+    [InlineData("1.0.0+build.1", "1.0.0+build.2", -1)] // same precedence, ordinal tiebreaker
+    [InlineData("1.0.0+build.2", "1.0.0+build.1", 1)]
+    [InlineData("1.0", "v1.0.0", -1)]            // optional patch → same SemVer, different raw
+    [InlineData("v1.0.0", "1.0", 1)]
+    [InlineData("1.0.0", "1.0.0", 0)]            // identical raw strings still return 0
+    [InlineData("1.0.0-alpha", "v1.0.0-alpha", -1)]
+    public void CompareTo_SemVerEquivalentButDifferentRawString_ReturnsNonZero(string a, string b, int expected)
+    {
+        var viA = new VersionIdentifier(a);
+        var viB = new VersionIdentifier(b);
+        int result = Math.Sign(viA.CompareTo(viB));
+        Assert.Equal(expected, result);
+    }
+
+    /// <summary>
+    /// Verifies the <see cref="IComparable{T}"/> contract invariant:
+    /// <c>CompareTo == 0</c> must imply <c>Equals == true</c>.
+    /// For every pair where <c>Equals</c> returns <c>false</c>, <c>CompareTo</c> must not return 0.
+    /// </summary>
+    [Theory]
+    [InlineData("1.0.0",  "v1.0.0")]
+    [InlineData("v1.0.0", "1.0.0")]
+    [InlineData("1.0.0+build.1", "1.0.0+build.2")]
+    [InlineData("1.0.0+build.2", "1.0.0+build.1")]
+    [InlineData("1.0",  "v1.0.0")]
+    [InlineData("v1.0.0", "1.0")]
+    [InlineData("1.0.0-alpha",  "v1.0.0-alpha")]
+    [InlineData("v1.0.0-alpha", "1.0.0-alpha")]
+    [InlineData("1.0.0", "2.0.0")]
+    public void CompareTo_Contract_EqualsFalseImpliesCompareToNotZero(string a, string b)
+    {
+        var viA = new VersionIdentifier(a);
+        var viB = new VersionIdentifier(b);
+        Assert.False(viA.Equals(viB), "Precondition: Equals must return false for this test to be meaningful.");
+        Assert.NotEqual(0, viA.CompareTo(viB));
+        Assert.NotEqual(0, viB.CompareTo(viA));
+    }
+
+    /// <summary>
+    /// Verifies the converse: when <c>Equals</c> returns <c>true</c>, <c>CompareTo</c> must return 0.
+    /// </summary>
+    [Theory]
+    [InlineData("1.0.0", "1.0.0")]
+    [InlineData("v1.0.0", "v1.0.0")]
+    [InlineData("25w14a", "25w14a")]
+    [InlineData("random", "random")]
+    public void CompareTo_Contract_EqualsTrueImpliesCompareToZero(string a, string b)
+    {
+        var viA = new VersionIdentifier(a);
+        var viB = new VersionIdentifier(b);
+        Assert.True(viA.Equals(viB), "Precondition: Equals must return true for this test to be meaningful.");
+        Assert.Equal(0, viA.CompareTo(viB));
+    }
+
     // ── Comparison (fallback to string ordinal) ──────────────────────────
 
     [Theory]

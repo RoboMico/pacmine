@@ -8,8 +8,11 @@ namespace Pacmine.Core;
 /// Wraps <see cref="SemVersion"/> internally for parsing and comparison,
 /// with a fallback to raw string comparison for non-SemVer strings.
 /// Comparison uses <see cref="SemVersion.ComparePrecedenceTo(SemVersion)"/>
-/// when both sides are valid <see cref="SemVersion"/>; otherwise falls back
-/// to ordinal <see cref="string.Compare(string, string, StringComparison)"/>.
+/// when both sides are valid <see cref="SemVersion"/>, with ordinal
+/// <see cref="string.Compare(string, string, StringComparison)"/> as a tiebreaker
+/// for SemVer-equivalent strings (e.g., "1.0.0" vs. "v1.0.0") to satisfy
+/// the <see cref="IComparable{T}"/> contract; otherwise falls back directly
+/// to ordinal string comparison.
 /// </summary>
 [JsonConverter(typeof(VersionIdentifierJsonConverter))]
 public class VersionIdentifier : IComparable<VersionIdentifier>, IEquatable<VersionIdentifier>
@@ -66,7 +69,11 @@ public class VersionIdentifier : IComparable<VersionIdentifier>, IEquatable<Vers
 
     /// <summary>
     /// Compares this instance to another <see cref="VersionIdentifier"/> using <see cref="SemVersion.ComparePrecedenceTo(SemVersion)"/>
-    /// when both are valid <see cref="SemVersion"/>; falls back to ordinal <see cref="string.Compare(string, string, StringComparison)"/> otherwise.
+    /// when both are valid <see cref="SemVersion"/>, falling back to ordinal
+    /// <see cref="string.Compare(string, string, StringComparison)"/> as a tiebreaker
+    /// for SemVer-equivalent strings to satisfy the <see cref="IComparable{T}"/> contract
+    /// (<c>CompareTo == 0</c> implies <c>Equals == true</c>).
+    /// Falls back directly to ordinal string comparison when either side is not a valid SemVer.
     /// </summary>
     /// <param name="other">The other version identifier to compare to.</param>
     /// <returns>A value indicating the relative order.</returns>
@@ -75,7 +82,14 @@ public class VersionIdentifier : IComparable<VersionIdentifier>, IEquatable<Vers
         if (other is null)
             return 1;
         if (_semver != null && other._semver != null)
-            return _semver.ComparePrecedenceTo(other._semver);
+        {
+            var semverResult = _semver.ComparePrecedenceTo(other._semver);
+            if (semverResult != 0)
+                return semverResult;
+            // SemVer-equivalent (e.g. "1.0.0" vs "v1.0.0"): break tie by raw string comparison
+            // to satisfy the IComparable<T> contract (CompareTo == 0 implies Equals == true).
+            return string.Compare(_raw, other._raw, StringComparison.Ordinal);
+        }
         return string.Compare(_raw, other._raw, StringComparison.Ordinal);
     }
 
