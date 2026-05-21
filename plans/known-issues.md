@@ -58,25 +58,7 @@ found by AI. human checked this and removed false alarms. already fixed issues h
 
 - ~~BUG-P5: `CleanUpAsync` is synchronous but returns `Task`~~
 
-#### BUG-P6: Download filename race condition
-
-**File:** `PackageBuilder.cs:167-171`
-
-```csharp
-string fileName = "";
-dlService.DownloadStarted += (s, e) => { fileName = e.FileName; };
-await dlService.DownloadFileTaskAsync(src, SourceDirectory.FullName);
-if (string.IsNullOrEmpty(fileName))
-    throw new InvalidOperationException(...);
-```
-
-The event handler closure races with `DownloadFileTaskAsync`. If the download is instant (e.g., cached), the event may not fire before the check.
-
-#### BUG-P7: No timeout on git and shell processes
-
-**File:** `PackageBuilder.cs:249, GlobalFunctions.cs:107, 163`
-
-`process.WaitForExitAsync()` with no cancellation token. If a git server or shell command hangs, the build hangs indefinitely. Should use `WaitForExitAsync(CancellationToken)` with a configurable timeout.
+- ~~BUG-P7: No timeout on git and shell processes~~
 
 #### BUG-P8: `VerifySourceAsync` loads entire file into memory
 

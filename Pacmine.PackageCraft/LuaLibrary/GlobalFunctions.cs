@@ -50,7 +50,13 @@ public class GlobalFunctions
         {
             luaState.Environment["git"] = new LuaFunction((context, ct) =>
             {
-                int ret = GitCall(context.GetArgument<string>(0));
+                string args = context.GetArgument<string>(0);
+                int timeoutSec = 0;
+                if (context.ArgumentCount > 1)
+                {
+                    timeoutSec = context.GetArgument<int>(1);
+                }
+                int ret = GitCall(args, timeoutSec);
                 return new(context.Return(ret));
             });
         }
@@ -60,7 +66,13 @@ public class GlobalFunctions
         {
             luaState.Environment["shell"] = new LuaFunction((context, ct) =>
             {
-                int ret = ShellExecute(context.GetArgument<string>(0));
+                string command = context.GetArgument<string>(0);
+                int timeoutSec = 0;
+                if (context.ArgumentCount > 1)
+                {
+                    timeoutSec = context.GetArgument<int>(1);
+                }
+                int ret = ShellExecute(command, timeoutSec);
                 return new(context.Return(ret));
             });
         }
@@ -90,37 +102,9 @@ public class GlobalFunctions
     /// </summary>
     /// <param name="args">The command-line arguments to pass to Git.</param>
     /// <returns>The exit code returned by the Git process.</returns>
-    public int GitCall(string args)
+    public int GitCall(string args, int timeoutSec = 0)
     {
-        var psi = new ProcessStartInfo
-        {
-            FileName = gitCommand,
-            Arguments = args,
-            WorkingDirectory = builderContext.SourceDirectory!.FullName,
-            RedirectStandardOutput = true,
-            RedirectStandardError = true,
-            UseShellExecute = false
-        };
-
-        using var process = new Process { StartInfo = psi };
-
-        process.OutputDataReceived += (sender, e) =>
-        {
-            if (e.Data != null)
-                builderContext.WriteStdout(e.Data + "\n");
-        };
-        process.ErrorDataReceived += (sender, e) =>
-        {
-            if (e.Data != null)
-                builderContext.WriteStderr(e.Data + "\n");
-        };
-
-        process.Start();
-        process.BeginOutputReadLine();
-        process.BeginErrorReadLine();
-        process.WaitForExit();
-
-        return process.ExitCode;
+        return RunProcess(gitCommand!, args, builderContext.SourceDirectory!.FullName, timeoutSec);
     }
 
     /// <summary>
@@ -129,7 +113,7 @@ public class GlobalFunctions
     /// </summary>
     /// <param name="command">The command to execute.</param>
     /// <returns>The exit code returned by the shell process.</returns>
-    public int ShellExecute(string command)
+    public int ShellExecute(string command, int timeoutSec = 0)
     {
         string shell;
         string shellArgs;
@@ -144,12 +128,16 @@ public class GlobalFunctions
             shell = Environment.GetEnvironmentVariable("SHELL") ?? "/bin/sh";
             shellArgs = "-c " + command;
         }
+        return RunProcess(shell, shellArgs, builderContext.SourceDirectory!.FullName, timeoutSec);
+    }
 
+    private int RunProcess(string command, string args, string workingDirectory, int timeoutSec)
+    {
         var psi = new ProcessStartInfo
         {
-            FileName = shell,
-            Arguments = shellArgs,
-            WorkingDirectory = builderContext.SourceDirectory!.FullName,
+            FileName = command,
+            Arguments = args,
+            WorkingDirectory = workingDirectory,
             RedirectStandardOutput = true,
             RedirectStandardError = true,
             UseShellExecute = false
@@ -171,7 +159,21 @@ public class GlobalFunctions
         process.Start();
         process.BeginOutputReadLine();
         process.BeginErrorReadLine();
-        process.WaitForExit();
+
+        if (timeoutSec > 0)
+        {
+            if (!process.WaitForExit(timeoutSec * 1000))
+            {
+                // Timed out — kill the process tree and return a failure exit code.
+                process.Kill(entireProcessTree: true);
+                builderContext.WriteStderr($"\nProcess timed out after {timeoutSec} second(s) and was killed.\n");
+                return -65536;
+            }
+        }
+        else
+        {
+            process.WaitForExit();
+        }
 
         return process.ExitCode;
     }
