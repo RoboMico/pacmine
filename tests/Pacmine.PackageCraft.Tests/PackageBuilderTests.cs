@@ -200,10 +200,11 @@ public class PackageBuilderTests
         InvokeWriteStdout(builder, "hello");
         InvokeWriteStdout(builder, " world");
 
-        var reader = builder.StandardOutput;
-        var text = reader.ReadToEnd();
+        var sb = new System.Text.StringBuilder();
+        while (builder.StdoutReader.TryRead(out var line))
+            sb.Append(line);
 
-        Assert.Equal("hello world", text);
+        Assert.Equal("hello world", sb.ToString());
     }
 
     [Fact]
@@ -219,10 +220,11 @@ public class PackageBuilderTests
 
         InvokeWriteStderr(builder, "error message");
 
-        var reader = builder.StandardError;
-        var text = reader.ReadToEnd();
+        var sb = new System.Text.StringBuilder();
+        while (builder.StderrReader.TryRead(out var line))
+            sb.Append(line);
 
-        Assert.Equal("error message", text);
+        Assert.Equal("error message", sb.ToString());
     }
 
     [Fact]

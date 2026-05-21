@@ -1,8 +1,7 @@
-using System.Diagnostics;
 using System.IO.Compression;
 using System.Security.Cryptography;
-using System.Text;
 using System.Text.Json;
+using System.Threading.Channels;
 using Downloader;
 using Lua;
 using Pacmine.Core;
@@ -13,17 +12,22 @@ namespace Pacmine.PackageCraft;
 /// <summary>
 /// Orchestrates the PackageCraft build pipeline: fetching sources, verifying checksums,
 /// invoking Lua build phases, and compressing the output package.
-/// 
+///
 /// <para>This class contains <b>no permission flags</b>. Permissions are configured on
 /// <see cref="PackageBuilderFactory"/> and the appropriate Lua libraries are injected
 /// at construction time by the factory.</para>
+///
+/// <para>Build output (stdout/stderr) is exposed via <see cref="ChannelReader{T}"/>
+/// properties (<see cref="StdoutReader"/> and <see cref="StderrReader"/>), enabling
+/// callers to consume output asynchronously using <c>await foreach</c>.
+/// The channels are completed when the builder is disposed.</para>
 /// </summary>
-public class PackageBuilder
+public class PackageBuilder : IDisposable
 {
     private readonly LuaState luaState;
     private readonly FileSystemInfo?[] trackedSources;
-    private readonly StringBuilder _stdoutBuffer = new();
-    private readonly StringBuilder _stderrBuffer = new();
+    private readonly Channel<string> _stdoutChannel = Channel.CreateUnbounded<string>();
+    private readonly Channel<string> _stderrChannel = Channel.CreateUnbounded<string>();
 
     /// <summary>
     /// Initializes a new instance of the <see cref="PackageBuilder"/> class.
@@ -103,28 +107,18 @@ public class PackageBuilder
     public DownloadConfiguration DownloadConfig { get; }
 
     /// <summary>
-    /// Gets the standard output stream of the build process.
+    /// Gets a <see cref="ChannelReader{T}"/> that provides asynchronous access to the
+    /// standard output stream of the build process. Use <c>await foreach</c> with
+    /// <see cref="ChannelReader{T}.ReadAllAsync"/> to consume output in real time.
     /// </summary>
-    public StreamReader StandardOutput
-    {
-        get
-        {
-            var bytes = Encoding.UTF8.GetBytes(_stdoutBuffer.ToString());
-            return new StreamReader(new MemoryStream(bytes));
-        }
-    }
+    public ChannelReader<string> StdoutReader => _stdoutChannel.Reader;
 
     /// <summary>
-    /// Gets the standard error stream of the build process.
+    /// Gets a <see cref="ChannelReader{T}"/> that provides asynchronous access to the
+    /// standard error stream of the build process. Use <c>await foreach</c> with
+    /// <see cref="ChannelReader{T}.ReadAllAsync"/> to consume output in real time.
     /// </summary>
-    public StreamReader StandardError
-    {
-        get
-        {
-            var bytes = Encoding.UTF8.GetBytes(_stderrBuffer.ToString());
-            return new StreamReader(new MemoryStream(bytes));
-        }
-    }
+    public ChannelReader<string> StderrReader => _stderrChannel.Reader;
 
     /// <summary>
     /// Creates the source and package directories if they don't exist.
@@ -316,19 +310,23 @@ public class PackageBuilder
         PackageDirectory?.Delete(true);
     }
 
+    /// <summary>
+    /// Dispose the builder and free resources.
+    /// </summary>
+    public void Dispose()
+    {
+        _stdoutChannel.Writer.TryComplete();
+        _stderrChannel.Writer.TryComplete();
+        luaState.Dispose();
+    }
+
     internal void WriteStdout(string message)
     {
-        lock (_stdoutBuffer)
-        {
-            _stdoutBuffer.Append(message);
-        }
+        _stdoutChannel.Writer.TryWrite(message);
     }
 
     internal void WriteStderr(string message)
     {
-        lock (_stderrBuffer)
-        {
-            _stderrBuffer.Append(message);
-        }
+        _stderrChannel.Writer.TryWrite(message);
     }
 }
