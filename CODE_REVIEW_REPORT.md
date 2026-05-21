@@ -93,9 +93,9 @@ Happy-path test coverage is good. But across all modules, core pipeline methods 
 
 | # | Severity | Location | Issue |
 |---|----------|----------|-------|
-| P1 | **HIGH** | `SourceFetchers.cs:221` | `git clone --revision <refspec>` — `--revision` is not a valid git flag. Git source fetching is broken. |
+| ~~P1~~ | Invalid | `SourceFetchers.cs:221` | `git clone --revision <refspec>` — `--revision` is not a valid git flag. Git source fetching is broken. |
 | P2 | **HIGH** | `RestrictedFilesysLuaLibrary.cs:90`, `UnsafeFilesysLuaLibrary.cs:42` | `File.Copy` without `overwrite: true`. Existing destination files cause `IOException` — build pipeline will fail on re-runs. |
-| P3 | **HIGH** | `SourceFetchers.cs:72-73` | `LocalFileSourceFetcher` uses `Path.Combine` without normalization — vulnerable to path traversal (`../` segments escape the working directory). |
+| ~~P3~~ | Works as Intended | `SourceFetchers.cs:72-73` | `LocalFileSourceFetcher` uses `Path.Combine` without normalization — vulnerable to path traversal (`../` segments escape the working directory). |
 | P4 | **MEDIUM** | `PackageMetaLuaObject.cs:172`, `PackageCraftRecipeLuaObject.cs:123` | `FromLuaTable` calls `.Read<T>()` on every field without checking for `LuaValueType.Nil` — absent optional fields cause runtime exceptions. |
 | P5 | **MEDIUM** | `PackageBuilder.cs:151,191,196` | No bounds checking on `index` parameter in `FetchSourceAsync` and `VerifySourceAsync`. |
 | P6 | **MEDIUM** | `PackageBuilder.cs:127-136` | `OutputDirectory` is never created before `CompressPackageAsync` writes to it. |

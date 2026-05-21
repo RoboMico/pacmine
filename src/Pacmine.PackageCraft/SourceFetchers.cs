@@ -101,7 +101,7 @@ public class RemoteSourceFetcher : SourceFetcher
     /// <summary>
     /// Downloads a remote file from the specified HTTP/HTTPS URL into <see cref="SourceFetcher.SourceDirectory"/>.
     /// The file name is determined from the server-provided response headers captured during the
-    /// <see cref="DownloadService.DownloadStarted"/> event.
+    /// <see cref="AbstractDownloadService.DownloadStarted"/> event.
     /// </summary>
     /// <param name="url">The HTTP or HTTPS URL of the file to download.</param>
     /// <returns>

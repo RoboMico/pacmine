@@ -7,18 +7,19 @@ namespace Pacmine.Core;
 /// </summary>
 public partial class PackageMeta
 {
-    /// <summary>
-    /// Gets a regex pattern for validating package names.
-    /// </summary>
-    /// <remarks>
-    /// Package names may only consist of lowercase letters (a-z), digits (0-9), hyphens (-),
-    /// underscores (_), and periods (.), and must start with a letter or digit.
-    /// </remarks>
-    /// <returns>A compiled regex for package name validation.</returns>
     [GeneratedRegex(@"^[a-z0-9][a-z0-9\-_\.]*$")]
-    public static partial Regex PackageNameRegex();
-
+    private static partial Regex GeneratedPackageNameRegex();
     private string _name = null!;
+
+    /// <summary>
+    /// The regex pattern for validating package names.
+    /// Package names may only consist of lowercase letters (<c>a-z</c>), digits (<c>0-9</c>), hyphens (<c>-</c>),
+    /// underscores (<c>_</c>), and periods (<c>.</c>), and must start with a letter or digit.
+    /// <para>
+    /// The raw regex expression is <c>^[a-z0-9][a-z0-9\-_\.]*$</c>.
+    /// </para>
+    /// </summary>
+    public static Regex PackageNameRegex => GeneratedPackageNameRegex();
 
     /// <summary>
     /// Gets or sets the name of the package.
@@ -29,7 +30,7 @@ public partial class PackageMeta
         get => _name;
         set
         {
-            if (!PackageNameRegex().IsMatch(value))
+            if (!PackageNameRegex.IsMatch(value))
                 throw new ArgumentException("Invalid package name");
             _name = value;
         }

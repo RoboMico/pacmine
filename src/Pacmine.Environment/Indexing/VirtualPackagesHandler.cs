@@ -9,7 +9,7 @@ namespace Pacmine.Environment.Indexing;
 /// A single virtual package (name + version) can be provided by multiple packages.
 /// </summary>
 /// <remarks>
-/// Content type: <c>Dictionary<string, Dictionary<VersionIdentifier, List<string>>></c>
+/// Content type: <c>Dictionary&lt;string, Dictionary&lt;VersionIdentifier, List&lt;string&gt;&gt;&gt;</c>
 /// <list type="bullet">
 ///   <item>Outer key: virtual package name</item>
 ///   <item>Middle key: version identifier</item>
