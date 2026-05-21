@@ -1,0 +1,6 @@
+- name: Pacmine.Core
+  href: core.md
+- name: Pacmine.Environment
+  href: environment.md
+- name: Pacmine.PackageCraft
+  href: package-craft.md

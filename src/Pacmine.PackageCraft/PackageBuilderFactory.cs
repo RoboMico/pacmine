@@ -196,7 +196,8 @@ public class PackageBuilderFactory : IDisposable
     /// Parses a PackageCraft Lua recipe script and produces a <see cref="PackageCraftRecipe"/>.
     /// </summary>
     /// <param name="script">The Lua script content containing the PackageCraft recipe.</param>
-    /// <returns>A task representing the asynchronous operation, returning the parsed recipe.</returns>
+    /// <returns>A task representing the asynchronous operation, returning the parsed recipe.
+    /// The produced recipe is also stored internally so that it can be used in <see cref="CreateBuilder()"/>.</returns>
     public async Task<PackageCraftRecipe> LoadRecipeAsync(string script)
     {
         // Dispose any previously cached state before creating a new one (e.g. on re-use)
@@ -213,7 +214,7 @@ public class PackageBuilderFactory : IDisposable
     // ── Builder creation ─────────────────────────────────────────────────
 
     /// <summary>
-    /// Creates a fully-configured <see cref="PackageBuilder"/> with Lua libraries injected
+    /// Creates a fully-configured <see cref="PackageBuilder"/> with Lua state prepared
     /// according to the factory's current permission settings.
     /// </summary>
     /// <returns>A configured <see cref="PackageBuilder"/> instance.</returns>

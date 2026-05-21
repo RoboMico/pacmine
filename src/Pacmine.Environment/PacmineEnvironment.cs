@@ -244,7 +244,8 @@ public class PacmineEnvironment : IDisposable
     /// You may also want to check for potentially conflicting files with <see cref="CheckConflictFiles(string[],string[])"/>.
     /// </summary>
     /// <param name="packages">The package list to check.</param>
-    /// <returns>An array of <see cref="UnacceptReason"/> indicating why each package is unacceptable.</returns>
+    /// <returns>An array of <see cref="UnacceptReason"/> indicating why each package is unacceptable.
+    /// An empty array indicates that all packages fit in.</returns>
     public UnacceptReason[] CheckAcceptance(PackageMeta[] packages)
     {
         var reasons = new List<UnacceptReason>();
@@ -496,8 +497,7 @@ public class PacmineEnvironment : IDisposable
 
     /// <summary>
     /// Remove all files owned by the specified package from disk.
-    /// Uses the in-memory managed file index to find the files — does NOT
-    /// read the package registry from disk and does NOT modify the managed file index.
+    /// This is a pure file system operation and have no effect on registry or index.
     /// </summary>
     /// <param name="packageName">The name of the package whose files to remove.</param>
     public void RemovePackageFiles(string packageName)
@@ -592,7 +592,7 @@ public class PacmineEnvironment : IDisposable
     /// <param name="source">The source directory containing all files to install.</param>
     /// <returns>A dictionary mapping each relative file path to its SHA256 checksum.</returns>
     /// <remarks>
-    /// This method only performs file operations — it does not read or write the package registry.
+    /// This is a pure file system operation and have no effect on registry or index.
     /// The caller should use <see cref="WriteRegistry"/> separately to persist the returned
     /// file list as part of a <see cref="PackageRegistry"/>.
     /// </remarks>

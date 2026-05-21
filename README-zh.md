@@ -40,5 +40,5 @@ soon
 
 [downloader]: https://github.com/bezzad/Downloader
 [luacsharp]: https://github.com/nuskey8/Lua-CSharp
-[semver]: https://github.com/adamreeve/semver.net
+[semver]: https://github.com/WalkerCodeRanger/semver
 [system.commandline]: https://www.nuget.org/packages/System.CommandLine
