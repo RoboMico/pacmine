@@ -70,11 +70,7 @@ found by AI. human checked this and removed false alarms. already fixed issues h
 
 ### Design Issues
 
-#### DES-P1: `FetchSourceAsync` does three distinct operations in one method
-
-**File:** `PackageBuilder.cs:155-270`
-
-HTTP download, git clone, and local file copy — three distinct source types in a single 115-line method. Each has different preconditions, error handling, and side effects. Should be separated into `FetchHttpAsync`, `FetchGitAsync`, `FetchLocalAsync`.
+- ~~DES-P1: `FetchSourceAsync` does three distinct operations in one method~~
 
 #### DES-P2: Lua object wrappers inherit from domain models rather than composing
 

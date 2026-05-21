@@ -24,11 +24,6 @@ public class PackageBuilder
     private readonly FileSystemInfo?[] trackedSources;
     private readonly StringBuilder _stdoutBuffer = new();
     private readonly StringBuilder _stderrBuffer = new();
-    private static readonly DownloadConfiguration defaultDlConfig = new()
-    {
-        ChunkCount = 8,
-        ParallelDownload = true
-    };
 
     /// <summary>
     /// Initializes a new instance of the <see cref="PackageBuilder"/> class.
@@ -49,7 +44,7 @@ public class PackageBuilder
         DirectoryInfo? packageDirectory,
         DirectoryInfo? outputDirectory,
         string? gitCommand,
-        DownloadConfiguration? downloadConfig)
+        DownloadConfiguration downloadConfig)
     {
         this.luaState = luaState;
         Recipe = recipe;
@@ -58,7 +53,7 @@ public class PackageBuilder
         PackageDirectory = packageDirectory;
         OutputDirectory = outputDirectory;
         GitCommand = gitCommand;
-        DownloadConfig = downloadConfig ?? defaultDlConfig;
+        DownloadConfig = downloadConfig;
         trackedSources = new FileSystemInfo?[recipe.Sources.Count];
     }
 
@@ -158,115 +153,32 @@ public class PackageBuilder
         {
             throw new Exception("Source directory is not configured");
         }
+
         var src = Recipe.Sources[index];
+        SourceFetcher fetcher;
+
         if (src.StartsWith("http://") || src.StartsWith("https://"))
         {
-            // download the file
-            DownloadService dlService = new(DownloadConfig);
-            string fileName = "";
-            dlService.DownloadStarted += (s, e) =>
-            {
-                fileName = e.FileName;
-            };
-            await dlService.DownloadFileTaskAsync(src, SourceDirectory.FullName);
-            if (string.IsNullOrEmpty(fileName))
-                throw new InvalidOperationException($"Download completed but no file name was reported for '{src}'.");
-            trackedSources[index] = new FileInfo(Path.Combine(SourceDirectory.FullName, fileName));
+            fetcher = new RemoteSourceFetcher(SourceDirectory, DownloadConfig);
         }
         else if (src.StartsWith("git://"))
         {
-            // Guards
             if (GitCommand == null)
             {
-                throw new Exception("Git is disabled for this builder.");
+                throw new Exception("Git is disabled for this builder");
             }
-
-            // Parse the git:// URL
-            string url = src["git://".Length..];
-
-            string? branch = null;
-            string? refSpec = null;
-            int hashIndex = url.IndexOf('#');
-            int dollarIndex = url.IndexOf('$');
-
-            if (hashIndex >= 0 && dollarIndex >= 0)
-            {
-                throw new Exception("URL contains both a branch and a ref spec");
-            }
-
-            if (hashIndex >= 0)
-            {
-                branch = url[(hashIndex + 1)..];
-                url = url[..hashIndex];
-            }
-            if (dollarIndex >= 0)
-            {
-                refSpec = url[(dollarIndex + 1)..];
-                url = url[..dollarIndex];
-            }
-
-            // Extract repo name from URL
-            string repoName = Path.GetFileNameWithoutExtension(url);
-            if (string.IsNullOrEmpty(repoName))
-            {
-                // Fallback: use last path segment
-                repoName = url.TrimEnd('/').Split('/')[^1];
-            }
-
-            string clonePath = Path.Combine(SourceDirectory.FullName, repoName);
-
-            // Build arguments using ArgumentList for proper escaping
-            var psi = new ProcessStartInfo
-            {
-                FileName = GitCommand,
-                WorkingDirectory = SourceDirectory.FullName,
-                RedirectStandardOutput = true,
-                RedirectStandardError = true,
-                UseShellExecute = false
-            };
-
-            psi.ArgumentList.Add("clone");
-            psi.ArgumentList.Add(url);
-            psi.ArgumentList.Add(clonePath);
-            psi.ArgumentList.Add("--depth");
-            psi.ArgumentList.Add("1");
-
-            if (branch != null)
-            {
-                psi.ArgumentList.Add("--branch");
-                psi.ArgumentList.Add(branch);
-            }
-
-            if (refSpec != null)
-            {
-                psi.ArgumentList.Add("--revision");
-                psi.ArgumentList.Add(refSpec);
-            }
-
-            using var process = new Process { StartInfo = psi };
-            process.Start();
-            string errorOutput = await process.StandardError.ReadToEndAsync();
-            await process.WaitForExitAsync();
-
-            if (process.ExitCode != 0)
-            {
-                throw new Exception($"Git clone failed (exit code {process.ExitCode}): {errorOutput}");
-            }
-
-            trackedSources[index] = new DirectoryInfo(clonePath);
+            fetcher = new GitSourceFetcher(SourceDirectory, GitCommand);
+            src = src["git://".Length..];
         }
         else
         {
-            // local file, copy from working directory
+            // Local file copy
             if (WorkingDirectory == null)
-            {
-                throw new Exception("Working directory is not configured");
-            }
-            string srcFile = Path.Combine(WorkingDirectory.FullName, src);
-            string destFile = Path.Combine(SourceDirectory.FullName, src);
-            File.Copy(srcFile, destFile, overwrite: true);
-            trackedSources[index] = new FileInfo(destFile);
+                throw new InvalidOperationException("WorkingDirectory is not configured but source is a local file: " + src);
+            fetcher = new LocalFileSourceFetcher(SourceDirectory, WorkingDirectory);
         }
+
+        trackedSources[index] = await fetcher.FetchAsync(src);
     }
 
     /// <summary>
