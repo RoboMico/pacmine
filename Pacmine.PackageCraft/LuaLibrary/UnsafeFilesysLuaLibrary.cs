@@ -44,12 +44,24 @@ public partial class UnsafeFilesysLuaLibrary : AbstractFilesysLuaLibrary
 
     /// <summary>
     /// Deletes the specified file. Supports <c>${SRCDIR}</c> and <c>${PKGDIR}</c> variables.
+    /// Attempting to delete folders with this method will throw an exception.
+    /// Use <see cref="DeleteDirectory"/> instead.
     /// </summary>
     /// <param name="file">The path of the file to delete.</param>
     [LuaMember("delete")]
     public void Delete(string file)
     {
         File.Delete(ResolvePath(file));
+    }
+
+    /// <summary>
+    /// Deletes the specified directory and all its contents. Supports <c>${SRCDIR}</c> and <c>${PKGDIR}</c> variables.
+    /// </summary>
+    /// <param name="path">The path of the directory to delete.</param>
+    [LuaMember("deletedir")]
+    public void DeleteDirectory(string path)
+    {
+        Directory.Delete(ResolvePath(path), true);
     }
 
     /// <summary>

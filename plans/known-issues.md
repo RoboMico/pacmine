@@ -62,41 +62,11 @@ found by AI. human checked this and removed false alarms. already fixed issues h
 
 - ~~BUG-P8: `VerifySourceAsync` loads entire file into memory~~
 
-#### BUG-P9: `CompressPackageAsync` writes meta JSON then ZIPs — partial failure leaves corrupt state
-
-**File:** `PackageBuilder.cs:391-394`
-
-If the ZIP creation fails, the meta JSON file was already written. On retry, the meta file may be stale or incomplete. Write to a temp file first, move on success.
-
-#### BUG-P10: No bounds check on `index` in `FetchSourceAsync` / `VerifySourceAsync`
-
-**File:** `PackageBuilder.cs:161, 280-285`
-
-No validation that `index < Sources.Count` or `index < SourceChecksums.Count`. If `SourceChecksums` has fewer entries than `Sources`, `VerifySourceAsync` throws `ArgumentOutOfRangeException`. Validate lengths match at recipe load time.
-
 ### Security Issues
 
-#### SEC-1: Path check allows operations on source/package directory roots
+- ~~SEC-1: Path check allows operations on source/package directory roots~~
 
-**File:** `RestrictedFilesysLuaLibrary.cs:30-31`
-
-```csharp
-!resolvedPath.Equals(sourceDirectory.FullName, StringComparison.Ordinal)
-```
-
-A Lua script calling `filesys.delete("${SRCDIR}")` passes the assertion check. While `File.Delete` on a directory throws `UnauthorizedAccessException` in .NET (preventing actual damage), the path check itself is too permissive. The equality check was added so `${PKGDIR}` works without a trailing slash, but this permits root-directory operations. A better design requires `${PKGDIR}/` with trailing slash.
-
-**Current test `Restricted_AssertsPath_EqualsDirectoryItself_Throws` passes for the wrong reason** — the exception comes from `File.Delete` rejecting a directory, NOT from `AssertPathAllowed`.
-
-#### SEC-2: Case-sensitive path prefix check fails on Windows
-
-**File:** `RestrictedFilesysLuaLibrary.cs:28-29`
-
-```csharp
-if (!resolvedPath.StartsWith(srcPrefix, StringComparison.Ordinal)
-```
-
-On case-insensitive filesystems (Windows, macOS default), `Path.GetFullPath` may return different casing than `DirectoryInfo.FullName`. Using `Ordinal` would block legitimate operations when case differs. Use `OrdinalIgnoreCase`.
+- ~~SEC-2: Case-sensitive path prefix check fails on Windows~~
 
 ### Design Issues
 

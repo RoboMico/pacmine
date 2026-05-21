@@ -20,18 +20,41 @@ public partial class RestrictedFilesysLuaLibrary : AbstractFilesysLuaLibrary
     {
     }
 
+    private static StringComparison GetPathStringComparison()
+    {
+        return OperatingSystem.IsWindows() || OperatingSystem.IsMacOS()
+            ? StringComparison.OrdinalIgnoreCase
+            : StringComparison.Ordinal;
+    }
+
+    private static bool IsSubPath(string resolvedPath, DirectoryInfo baseDirectory)
+    {
+        var comparison = GetPathStringComparison();
+        var relative = Path.GetRelativePath(baseDirectory.FullName, resolvedPath);
+        return !relative.StartsWith("..", comparison) && !Path.IsPathRooted(relative);
+    }
+
     private void AssertPathAllowed(string resolvedPath)
     {
-        var srcPrefix = sourceDirectory.FullName.TrimEnd(Path.DirectorySeparatorChar) + Path.DirectorySeparatorChar;
-        var pkgPrefix = packageDirectory.FullName.TrimEnd(Path.DirectorySeparatorChar) + Path.DirectorySeparatorChar;
+        bool inSource = IsSubPath(resolvedPath, sourceDirectory);
+        bool inPackage = IsSubPath(resolvedPath, packageDirectory);
 
-        if (!resolvedPath.StartsWith(srcPrefix, StringComparison.Ordinal) &&
-            !resolvedPath.StartsWith(pkgPrefix, StringComparison.Ordinal) &&
-            !resolvedPath.Equals(sourceDirectory.FullName, StringComparison.Ordinal) &&
-            !resolvedPath.Equals(packageDirectory.FullName, StringComparison.Ordinal))
+        if (!inSource && !inPackage)
         {
             throw new UnauthorizedAccessException(
                 $"File system operation denied: path '{resolvedPath}' is outside the allowed directories.");
+        }
+    }
+
+    private void AssertPathNotRoot(string resolvedPath)
+    {
+        var comparison = GetPathStringComparison();
+        var trimmedPath = resolvedPath.TrimEnd(Path.DirectorySeparatorChar);
+        if (trimmedPath.Equals(sourceDirectory.FullName, comparison) ||
+            trimmedPath.Equals(packageDirectory.FullName, comparison))
+        {
+            throw new UnauthorizedAccessException(
+                $"File system operation denied: path '{resolvedPath}' is a root directory.");
         }
     }
 
@@ -70,6 +93,8 @@ public partial class RestrictedFilesysLuaLibrary : AbstractFilesysLuaLibrary
     /// <summary>
     /// Deletes the specified file. Supports <c>${SRCDIR}</c> and <c>${PKGDIR}</c> variables.
     /// The file must reside within the source or package directories.
+    /// Attempting to delete folders with this method will throw an exception.
+    /// Use <see cref="DeleteDirectory"/> instead.
     /// </summary>
     /// <param name="file">The path of the file to delete.</param>
     [LuaMember("delete")]
@@ -78,6 +103,20 @@ public partial class RestrictedFilesysLuaLibrary : AbstractFilesysLuaLibrary
         var resolvedFile = ResolvePath(file);
         AssertPathAllowed(resolvedFile);
         File.Delete(resolvedFile);
+    }
+
+    /// <summary>
+    /// Deletes the specified directory and all its contents. Supports <c>${SRCDIR}</c> and <c>${PKGDIR}</c> variables.
+    /// The directory must reside within the source or package directories and must not be the source or package directory itself.
+    /// </summary>
+    /// <param name="path">The path of the directory to delete.</param>
+    [LuaMember("deletedir")]
+    public void DeleteDirectory(string path)
+    {
+        var resolvedPath = ResolvePath(path);
+        AssertPathAllowed(resolvedPath);
+        AssertPathNotRoot(resolvedPath);
+        Directory.Delete(resolvedPath, true);
     }
 
     /// <summary>
