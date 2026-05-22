@@ -1,3 +1,5 @@
+name: DocFX to Pages
+
 on:
   push:
     branches:
