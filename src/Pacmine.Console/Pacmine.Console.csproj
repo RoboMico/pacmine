@@ -10,6 +10,7 @@
 
   <ItemGroup>
     <ProjectReference Include="..\Pacmine.Core\Pacmine.Core.csproj" />
+    <ProjectReference Include="..\Pacmine.Environment\Pacmine.Environment.csproj" />
     <ProjectReference Include="..\Pacmine.PackageCraft\Pacmine.PackageCraft.csproj" />
   </ItemGroup>
 

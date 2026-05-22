@@ -70,8 +70,8 @@ public partial class PackageCraftRecipeLuaObject
     [LuaMember("prepare")]
     public LuaValue LuaI_Prepare
     {
-        get => Recipe.Prepare ?? LuaValue.Nil;
-        set => Recipe.Prepare = (value.Type == LuaValueType.Nil) ? null : value.Read<LuaFunction>();
+        get => Recipe.LuaFuncPrepare ?? LuaValue.Nil;
+        set => Recipe.LuaFuncPrepare = (value.Type == LuaValueType.Nil) ? null : value.Read<LuaFunction>();
 
     }
 
@@ -81,8 +81,8 @@ public partial class PackageCraftRecipeLuaObject
     [LuaMember("get_version")]
     public LuaValue LuaI_GetVersion
     {
-        get => Recipe.GetVersion ?? LuaValue.Nil;
-        set => Recipe.GetVersion = (value.Type == LuaValueType.Nil) ? null : value.Read<LuaFunction>();
+        get => Recipe.LuaFuncGetVersion ?? LuaValue.Nil;
+        set => Recipe.LuaFuncGetVersion = (value.Type == LuaValueType.Nil) ? null : value.Read<LuaFunction>();
     }
 
     /// <summary>
@@ -91,8 +91,8 @@ public partial class PackageCraftRecipeLuaObject
     [LuaMember("build")]
     public LuaValue LuaI_Build
     {
-        get => Recipe.Build ?? LuaValue.Nil;
-        set => Recipe.Build = (value.Type == LuaValueType.Nil) ? null : value.Read<LuaFunction>();
+        get => Recipe.LuaFuncBuild ?? LuaValue.Nil;
+        set => Recipe.LuaFuncBuild = (value.Type == LuaValueType.Nil) ? null : value.Read<LuaFunction>();
     }
 
     /// <summary>
@@ -101,8 +101,8 @@ public partial class PackageCraftRecipeLuaObject
     [LuaMember("check")]
     public LuaValue LuaI_Check
     {
-        get => Recipe.Check ?? LuaValue.Nil;
-        set => Recipe.Check = (value.Type == LuaValueType.Nil) ? null : value.Read<LuaFunction>();
+        get => Recipe.LuaFuncCheck ?? LuaValue.Nil;
+        set => Recipe.LuaFuncCheck = (value.Type == LuaValueType.Nil) ? null : value.Read<LuaFunction>();
     }
 
     /// <summary>
@@ -111,8 +111,8 @@ public partial class PackageCraftRecipeLuaObject
     [LuaMember("package")]
     public LuaValue LuaI_Package
     {
-        get => Recipe.Package ?? LuaValue.Nil;
-        set => Recipe.Package = (value.Type == LuaValueType.Nil) ? null : value.Read<LuaFunction>();
+        get => Recipe.LuaFuncPackage ?? LuaValue.Nil;
+        set => Recipe.LuaFuncPackage = (value.Type == LuaValueType.Nil) ? null : value.Read<LuaFunction>();
     }
 
     /// <summary>

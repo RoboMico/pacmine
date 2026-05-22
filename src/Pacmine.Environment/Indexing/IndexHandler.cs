@@ -9,6 +9,8 @@ namespace Pacmine.Environment.Indexing;
 /// </summary>
 public abstract class IndexHandler
 {
+    protected static JsonSerializerOptions _jsonOptions = new() { WriteIndented = true };
+
     /// <summary>
     /// Gets the directory where index files are stored.
     /// </summary>
@@ -117,7 +119,7 @@ public abstract class IndexHandler<T> : IndexHandler where T : new()
         {
             var path = Path.Combine(IndexDirectory.FullName, FileName);
             var tempPath = path + ".tmp";
-            File.WriteAllText(tempPath, JsonSerializer.Serialize(content));
+            File.WriteAllText(tempPath, JsonSerializer.Serialize(content, _jsonOptions));
             File.Move(tempPath, path, overwrite: true);
             return true;
         }

@@ -28,6 +28,7 @@ public class PackageBuilder : IDisposable
     private readonly FileSystemInfo?[] trackedSources;
     private readonly Channel<string> _stdoutChannel = Channel.CreateUnbounded<string>();
     private readonly Channel<string> _stderrChannel = Channel.CreateUnbounded<string>();
+    private static JsonSerializerOptions jsonOptions = new() { WriteIndented = true };
 
     /// <summary>
     /// Initializes a new instance of the <see cref="PackageBuilder"/> class.
@@ -216,25 +217,28 @@ public class PackageBuilder : IDisposable
     /// <returns>A task representing the asynchronous operation, returning <c>true</c> if the function was called; otherwise, <c>false</c>.</returns>
     public async Task<bool> InvokePrepareAsync()
     {
-        if (Recipe.Prepare == null)
+        if (Recipe.LuaFuncPrepare == null)
             return false;
-        await luaState.CallAsync(Recipe.Prepare, []);
+        await luaState.CallAsync(Recipe.LuaFuncPrepare, []);
         return true;
     }
 
     /// <summary>
-    /// Invokes the get-version Lua function from the recipe and updates the package version, if defined.
+    /// Invokes the <c>get_version</c> Lua function from the recipe and updates the package version, if defined.
     /// </summary>
-    /// <returns>A task representing the asynchronous operation, returning <c>true</c> if the function was called; otherwise, <c>false</c>.</returns>
-    public async Task<bool> InvokeGetVersionAsync()
+    /// <returns>A task representing the asynchronous operation, returning a <see cref="Tuple{T1, T2}"/> where the first item
+    /// indicates whether the Lua function was invoked (<c>true</c>) or was not defined (<c>false</c>), and the second item
+    /// is the parsed <see cref="VersionIdentifier"/> if the function returned a valid version string; otherwise, <c>null</c>.</returns>
+    public async Task<Tuple<bool, VersionIdentifier?>> InvokeGetVersionAsync()
     {
-        if (Recipe.GetVersion == null)
-            return false;
-        var result = await luaState.CallAsync(Recipe.GetVersion, []);
-        if (result.Length == 0)
-            throw new InvalidOperationException("get_version must return a version string.");
+        if (Recipe.LuaFuncGetVersion == null)
+            return new(false, null);
+
+        var result = await luaState.CallAsync(Recipe.LuaFuncGetVersion, []);
+        if (result.Length == 0 || result[0].Type != LuaValueType.String)
+            return new(true, null);
         Recipe.Meta.Version = new(result[0].Read<string>());
-        return true;
+        return new(true, Recipe.Meta.Version);
     }
 
     /// <summary>
@@ -243,22 +247,27 @@ public class PackageBuilder : IDisposable
     /// <returns>A task representing the asynchronous operation, returning <c>true</c> if the function was called; otherwise, <c>false</c>.</returns>
     public async Task<bool> InvokeBuildAsync()
     {
-        if (Recipe.Build == null)
+        if (Recipe.LuaFuncBuild == null)
             return false;
-        await luaState.CallAsync(Recipe.Build, []);
+        await luaState.CallAsync(Recipe.LuaFuncBuild, []);
         return true;
     }
 
     /// <summary>
-    /// Invokes the check Lua function from the recipe, if defined.
+    /// Invokes the <c>check</c> Lua function from the recipe, if defined.
     /// </summary>
-    /// <returns>A task representing the asynchronous operation, returning <c>true</c> if the function was called; otherwise, <c>false</c>.</returns>
-    public async Task<bool> InvokeCheckAsync()
+    /// <returns>A task representing the asynchronous operation, returning a <see cref="Tuple{T1, T2}"/> where the first item
+    /// indicates whether the Lua function was invoked (<c>true</c>) or was not defined (<c>false</c>), and the second item
+    /// is the Boolean result returned by the Lua function; <c>null</c> if the function did not return a valid Boolean value.</returns>
+    public async Task<Tuple<bool, bool?>> InvokeCheckAsync()
     {
-        if (Recipe.Check == null)
-            return false;
-        await luaState.CallAsync(Recipe.Check, []);
-        return true;
+        if (Recipe.LuaFuncCheck == null)
+            return new(false, null);
+
+        var result = await luaState.CallAsync(Recipe.LuaFuncCheck, []);
+        if (result.Length == 0 || result[0].Type != LuaValueType.Boolean)
+            return new(true, null);
+        return new(true, result[0].Read<bool>());
     }
 
     /// <summary>
@@ -267,23 +276,26 @@ public class PackageBuilder : IDisposable
     /// <returns>A task representing the asynchronous operation, returning <c>true</c> if the function was called; otherwise, <c>false</c>.</returns>
     public async Task<bool> InvokePackageAsync()
     {
-        if (Recipe.Package == null)
+        if (Recipe.LuaFuncPackage == null)
             return false;
-        await luaState.CallAsync(Recipe.Package, []);
+        await luaState.CallAsync(Recipe.LuaFuncPackage, []);
         return true;
     }
 
     /// <summary>
     /// Compresses the package staging directory into a ZIP archive in the output directory.
     /// </summary>
-    /// <returns>A task representing the asynchronous operation.</returns>
-    /// <exception cref="Exception">Thrown when package or output directories are not configured.</exception>
-    public async Task CompressPackageAsync()
+    /// <returns>A task representing the asynchronous operation, returning the path to the created ZIP file.</returns>
+    public async Task<string> CompressPackageAsync()
     {
-        File.WriteAllText(Path.Combine(PackageDirectory.FullName, PackageParser.META_FILE_NAME), JsonSerializer.Serialize(Recipe.Meta));
-        ZipFile.CreateFromDirectory(
-            PackageDirectory.FullName,
-            Path.Combine(OutputDirectory.FullName, $"{Recipe.Meta.Name}-{Recipe.Meta.GetFullVersionString()}.pacminepack.zip"));
+        await File.WriteAllTextAsync(
+            Path.Combine(PackageDirectory.FullName, PackageParser.META_FILE_NAME),
+            JsonSerializer.Serialize(Recipe.Meta, jsonOptions));
+        string packagePath = Path.Combine(
+            OutputDirectory.FullName,
+            $"{Recipe.Meta.Name}-{Recipe.Meta.GetFullVersionString()}.pacminepack.zip");
+        await ZipFile.CreateFromDirectoryAsync(PackageDirectory.FullName, packagePath);
+        return packagePath;
     }
 
     /// <summary>

@@ -71,7 +71,7 @@ public partial class RestrictedFilesysLuaLibrary : AbstractFilesysLuaLibrary
         var resolvedDest = ResolvePath(dest);
         AssertPathAllowed(resolvedSource);
         AssertPathAllowed(resolvedDest);
-        File.Move(resolvedSource, resolvedDest);
+        File.Move(resolvedSource, resolvedDest, true);
     }
 
     /// <summary>

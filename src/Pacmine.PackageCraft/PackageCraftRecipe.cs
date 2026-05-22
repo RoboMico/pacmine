@@ -33,25 +33,25 @@ public class PackageCraftRecipe
     /// <summary>
     /// Gets or sets the Lua function to invoke during the prepare phase. Can be <c>null</c>.
     /// </summary>
-    public LuaFunction? Prepare { get; set; }
+    public LuaFunction? LuaFuncPrepare { get; set; }
 
     /// <summary>
     /// Gets or sets the Lua function to invoke during the get-version phase. Can be <c>null</c>.
     /// </summary>
-    public LuaFunction? GetVersion { get; set; }
+    public LuaFunction? LuaFuncGetVersion { get; set; }
 
     /// <summary>
     /// Gets or sets the Lua function to invoke during the build phase. Can be <c>null</c>.
     /// </summary>
-    public LuaFunction? Build { get; set; }
+    public LuaFunction? LuaFuncBuild { get; set; }
 
     /// <summary>
     /// Gets or sets the Lua function to invoke during the check phase. Can be <c>null</c>.
     /// </summary>
-    public LuaFunction? Check { get; set; }
+    public LuaFunction? LuaFuncCheck { get; set; }
 
     /// <summary>
     /// Gets or sets the Lua function to invoke during the package phase. Can be <c>null</c>.
     /// </summary>
-    public LuaFunction? Package { get; set; }
+    public LuaFunction? LuaFuncPackage { get; set; }
 }

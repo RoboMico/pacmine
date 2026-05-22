@@ -117,7 +117,7 @@ public class RemoteSourceFetcher : SourceFetcher
         {
             fileName = e.FileName;
         };
-        await dlService.DownloadFileTaskAsync(url, SourceDirectory.FullName);
+        await dlService.DownloadFileTaskAsync(url, SourceDirectory);
         if (string.IsNullOrEmpty(fileName))
             throw new InvalidOperationException($"Download completed but no file name was reported for '{url}'.");
         return new FileInfo(Path.Combine(SourceDirectory.FullName, fileName));

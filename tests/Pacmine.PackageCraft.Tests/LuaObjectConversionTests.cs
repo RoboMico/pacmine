@@ -142,8 +142,8 @@ public class LuaObjectConversionTests
             },
             Sources = ["source.zip"],
             SourceChecksums = ["sha256:def456"],
-            Prepare = null,
-            Build = null
+            LuaFuncPrepare = null,
+            LuaFuncBuild = null
         });
 
         var table = original.ToLuaTable();

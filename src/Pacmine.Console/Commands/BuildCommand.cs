@@ -1,4 +1,7 @@
 using System.CommandLine;
+using System.Threading.Channels;
+using Lua;
+using Pacmine.Core;
 using Pacmine.PackageCraft;
 
 namespace Pacmine.Console.Commands;
@@ -81,16 +84,19 @@ internal static class BuildCommand
         // 1. Read the Lua recipe
         if (pathToLua == null || !File.Exists(pathToLua))
         {
-            Console.Error.WriteLine("Recipe file not found: " + pathToLua);
+            ConsoleHelper.WriteError("Recipe file not found: " + pathToLua);
             return;
         }
+
+        ConsoleHelper.WriteInfo("=> Preparing recipe...");
+
         var script = await File.ReadAllTextAsync(pathToLua);
 
         // 2. Resolve working directory
         var wd = workingDirectory ?? Directory.GetCurrentDirectory();
 
         // 3. Create and configure the factory
-        var factory = new PackageBuilderFactory()
+        using var factory = new PackageBuilderFactory()
             .ConfigureWorkingDirectory(wd)
             .ConfigureGit(git)
             .ConfigureShellExecution(allowShell)
@@ -100,7 +106,12 @@ internal static class BuildCommand
         var recipe = await factory.LoadRecipeAsync(script);
 
         // 5. Create builder
-        var builder = factory.CreateBuilder();
+        using var builder = factory.CreateBuilder();
+
+        // Start background consumers that pipe Lua stdout/stderr to the console in real time.
+        // The channels are completed when builder.Dispose() is called by the 'using' statement.
+        var stdoutConsumer = Task.Run(() => ConsumeStdoutAsync(builder));
+        var stderrConsumer = Task.Run(() => ConsumeStderrAsync(builder));
 
         // 6. Execute the pipeline
         try
@@ -108,33 +119,48 @@ internal static class BuildCommand
             builder.InitializeDirectories();
 
             // Fetch every source
-            for (int i = 0; i < recipe.Sources.Count; i++)
+            ConsoleHelper.WriteInfo("=> Fetching sources...");
+            await IterateSourcesAsync(recipe.Sources, async (i, name) =>
             {
-                Console.WriteLine($"Fetching source [{i + 1}/{recipe.Sources.Count}]: {recipe.Sources[i]}");
+                ConsoleHelper.Write($"[{i + 1}/{recipe.Sources.Count}]: {name}");
                 await builder.FetchSourceAsync(i);
-            }
+            });
 
             // Verify every source
-            for (int i = 0; i < recipe.Sources.Count; i++)
+            ConsoleHelper.WriteInfo("=> Verifying sources...");
+            await IterateSourcesAsync(recipe.Sources, async (i, name) =>
             {
-                Console.WriteLine($"Verifying source [{i + 1}/{recipe.Sources.Count}]...");
+                ConsoleHelper.WriteInline($"[{i + 1}/{recipe.Sources.Count}]({name}): ");
                 if (!await builder.VerifySourceAsync(i))
                 {
-                    Console.Error.WriteLine($"Source {i} checksum verification failed.");
-                    return;
+                    ConsoleHelper.WriteInline("Failed!\n", ConsoleColor.Red);
+                    ConsoleHelper.WriteError("Some source files failed to verify. Build aborted.");
+                    System.Environment.Exit(1);
                 }
-            }
+                ConsoleHelper.WriteInline("Passed\n", ConsoleColor.Green);
+            });
 
             // Call Lua functions (undefined functions are ignored)
-            await builder.InvokePrepareAsync();
-            await builder.InvokeGetVersionAsync();
-            await builder.InvokeBuildAsync();
-            await builder.InvokeCheckAsync();
-            await builder.InvokePackageAsync();
+            await InvokeVoidLuaFunctionAsync("prepare", recipe.LuaFuncPrepare,
+                builder.InvokePrepareAsync);
+
+            await InvokeGetVersionLuaFunctionAsync(recipe.LuaFuncGetVersion,
+                builder.InvokeGetVersionAsync);
+
+            await InvokeVoidLuaFunctionAsync("build", recipe.LuaFuncBuild,
+                builder.InvokeBuildAsync);
+
+            await InvokeCheckLuaFunctionAsync(recipe.LuaFuncCheck,
+                builder.InvokeCheckAsync);
+
+            await InvokeVoidLuaFunctionAsync("package", recipe.LuaFuncPackage,
+                builder.InvokePackageAsync);
 
             // Compress package
-            await builder.CompressPackageAsync();
-            Console.WriteLine("Package built successfully.");
+            ConsoleHelper.WriteInfo("=> Compressing Package...");
+            var packagePath = await builder.CompressPackageAsync();
+            ConsoleHelper.WriteSuccess($"Successfully created package {recipe.Meta.Name} at {packagePath}");
+            builder.Dispose();
         }
         finally
         {
@@ -143,6 +169,123 @@ internal static class BuildCommand
             {
                 builder.CleanUp();
             }
+        }
+
+        // Wait for the output consumers to finish processing remaining messages
+        // (builder.Dispose() called by 'using' above completes the channels).
+        await Task.WhenAll(stdoutConsumer, stderrConsumer);
+    }
+
+    /// <summary>
+    /// Iterates over a list of source entries, applying an action to each.
+    /// </summary>
+    private static async Task IterateSourcesAsync(
+        List<string> sources,
+        Func<int, string, Task> action)
+    {
+        for (int i = 0; i < sources.Count; i++)
+        {
+            await action(i, sources[i]);
+        }
+    }
+
+    /// <summary>
+    /// Invokes a void-returning Lua function (prepare, build, package) with the standard
+    /// section header and defined/undefined messaging.
+    /// </summary>
+    private static async Task InvokeVoidLuaFunctionAsync(
+        string name,
+        LuaFunction? func,
+        Func<Task<bool>> invokeAsync)
+    {
+        ConsoleHelper.WriteInline($"=> {name}(): ", ConsoleColor.Cyan);
+        if (func == null)
+        {
+            ConsoleHelper.WriteInline("Undefined, skipped\n", ConsoleColor.Cyan);
+        }
+        else
+        {
+            ConsoleHelper.WriteInline("Executing...\n", ConsoleColor.Cyan);
+            await invokeAsync();
+        }
+    }
+
+    /// <summary>
+    /// Invokes the get_version Lua function and handles its result.
+    /// Prints an error and exits if the function fails to return a valid version.
+    /// </summary>
+    private static async Task InvokeGetVersionLuaFunctionAsync(
+        LuaFunction? func,
+        Func<Task<Tuple<bool, VersionIdentifier?>>> invokeAsync)
+    {
+        ConsoleHelper.WriteInline("=> get_version(): ", ConsoleColor.Cyan);
+        if (func == null)
+        {
+            ConsoleHelper.WriteInline("Undefined, skipped\n", ConsoleColor.Cyan);
+            return;
+        }
+
+        ConsoleHelper.WriteInline("Executing...\n", ConsoleColor.Cyan);
+        var res = await invokeAsync();
+        if (res.Item2 == null)
+        {
+            ConsoleHelper.WriteError("Error: get_version() failed to return a valid value. Build aborted.");
+            System.Environment.Exit(1);
+        }
+
+        ConsoleHelper.WriteInfo($"Package version updated to {res.Item2}");
+    }
+
+    /// <summary>
+    /// Invokes the check Lua function and handles its result.
+    /// Prints an error and exits if the function fails or returns false.
+    /// </summary>
+    private static async Task InvokeCheckLuaFunctionAsync(
+        LuaFunction? func,
+        Func<Task<Tuple<bool, bool?>>> invokeAsync)
+    {
+        ConsoleHelper.WriteInline("=> check(): ", ConsoleColor.Cyan);
+        if (func == null)
+        {
+            ConsoleHelper.WriteInline("Undefined, skipped\n", ConsoleColor.Cyan);
+            return;
+        }
+
+        ConsoleHelper.WriteInline("Executing...\n", ConsoleColor.Cyan);
+        var res = await invokeAsync();
+        if (res.Item2 == null)
+        {
+            ConsoleHelper.WriteError("Error: check() failed to return a valid value. Build aborted.");
+            System.Environment.Exit(1);
+        }
+        else if (res.Item2 == false)
+        {
+            ConsoleHelper.WriteError("Error: check() returned false. Build aborted.");
+            System.Environment.Exit(1);
+        }
+    }
+
+    /// <summary>
+    /// Consumes messages from the builder's stdout channel and writes them to the console.
+    /// Runs as a background task during the build pipeline.
+    /// </summary>
+    private static async Task ConsumeStdoutAsync(PackageBuilder builder)
+    {
+        await foreach (var message in builder.StdoutReader.ReadAllAsync())
+        {
+            Console.WriteLine(message);
+        }
+    }
+
+    /// <summary>
+    /// Consumes messages from the builder's stderr channel and writes them to the console error stream.
+    /// Runs as a background task during the build pipeline.
+    /// </summary>
+    private static async Task ConsumeStderrAsync(PackageBuilder builder)
+    {
+        await foreach (var message in builder.StderrReader.ReadAllAsync())
+        {
+            ConsoleHelper.WriteError(message);
         }
     }
 }

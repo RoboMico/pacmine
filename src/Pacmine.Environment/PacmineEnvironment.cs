@@ -12,6 +12,7 @@ namespace Pacmine.Environment;
 /// </summary>
 public class PacmineEnvironment : IDisposable
 {
+    private static JsonSerializerOptions _jsonOptions = new() { WriteIndented = true };
     private IndexManager _indexManager = null!;
     private FileStream? _lockStream;
 
@@ -470,7 +471,7 @@ public class PacmineEnvironment : IDisposable
             Path.Combine(
                 layerDir.FullName,
                 $"{registry.Meta.Name}.json"),
-            JsonSerializer.Serialize(registry));
+            JsonSerializer.Serialize(registry, _jsonOptions));
 
         return true;
     }

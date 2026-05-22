@@ -4,16 +4,17 @@ recipe.protocol = "v1"
 
 recipe.meta = {
   name = "sodium-mc26.1-fabric",
+  version = "0.8.12+mc26.1.2",
   description = "The fastest and most compatible rendering optimization mod for Minecraft.",
   upstream_url = "https://modrinth.com/mod/sodium",
   category = "mod",
   license = "Polyform-Shield-1.0.0",
-  version = "0.8.9",
   release = 1,
   epoch = 0,
+  groups = {},
   provides = {
-    sodium = "0.8.9",
-    indium = "1.0"
+    sodium = "0.8.12",
+    indium = "0.8.12"
   },
   depends = {
     fabricloader = ">=0.16.0",
@@ -55,15 +56,16 @@ recipe.meta = {
 }
 
 recipe.sources = {
-  "https://cdn.modrinth.com/data/AANobbMI/versions/uGvVQBnw/sodium-fabric-0.8.9%2Bmc26.1.1.jar"
+  "https://cdn.modrinth.com/data/AANobbMI/versions/eRJU33Hp/sodium-fabric-0.8.12%2Bmc26.1.2.jar?mr_download_reason=standalone&mr_game_version=26.1.2&mr_loader=fabric"
 }
 
 recipe.source_checksums = {
-  "sha256:25ad95ba787bd7ff2a0deaf20a8f4642b91e23489d0e10933693d9963a6022f2"
+  "sha256:e084c5c3c520dc0718dbaef1deafef0ba2c7c0d77c701ac34c07646f6ccb81df"
 }
 
 function recipe.package()
-  filesys.move("${SRCDIR}/sodium-fabric-0.8.9+mc26.1.1.jar", "${PKGDIR}/")
+  local filename = "sodium-fabric-0.8.12+mc26.1.2.jar"
+  filesys:move("${SRCDIR}/" .. filename, "${PKGDIR}/" .. filename)
 end
 
 return recipe
