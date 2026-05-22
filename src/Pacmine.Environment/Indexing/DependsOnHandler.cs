@@ -9,7 +9,7 @@ namespace Pacmine.Environment.Indexing;
 /// serving as a reverse dependency index.
 /// </summary>
 /// <remarks>
-/// Content type: <c>Dictionary&lt;string, List&lt;string&gt;&gt;</c>
+/// Content type: <c>Dictionary<string, List<string>></c>
 /// <list type="bullet">
 ///   <item>Key: A package name (real or virtual) that is depended upon</item>
 ///   <item>Value: List of package names that declare this as a dependency</item>
@@ -21,6 +21,8 @@ public class DependsOnHandler : IndexHandler<Dictionary<string, List<string>>>
     /// The filename used for the dependency mapping JSON file.
     /// </summary>
     public const string FILE_NAME = "depends_on.json";
+
+    protected override string FileName => FILE_NAME;
 
     private Dictionary<string, List<string>> _content;
 
@@ -34,17 +36,14 @@ public class DependsOnHandler : IndexHandler<Dictionary<string, List<string>>>
     }
 
     /// <summary>
-    /// Gets or sets the dependency name-to-dependents mapping and persists the data to disk on set.
+    /// Gets or sets the dependency name-to-dependents mapping.
+    /// Setting this property updates the in-memory state only.
+    /// Persistence is handled separately via <see cref="IndexHandler{T}.Persist"/>.
     /// </summary>
     public override Dictionary<string, List<string>> Content
     {
         get => _content;
-        set
-        {
-            _content = value;
-            File.WriteAllText(Path.Combine(IndexDirectory.FullName, FILE_NAME),
-                JsonSerializer.Serialize(_content));
-        }
+        set => _content = value;
     }
 
     /// <summary>
@@ -71,11 +70,9 @@ public class DependsOnHandler : IndexHandler<Dictionary<string, List<string>>>
     /// Only writes to disk if the scanned content differs from the current content.
     /// </summary>
     /// <param name="registries">The array of all registry entries to process.</param>
-    /// <returns><c>true</c> if the content was altered during the rebuild; otherwise, <c>false</c>.</returns>
+    /// <returns><c>true</c> if the rebuild was successful and the index was persisted; otherwise, <c>false</c>.</returns>
     public override bool OnRebuild(PackageRegistry[] registries)
     {
-        bool altered = false;
-
         var dependsOn = new Dictionary<string, List<string>>();
         foreach (var registry in registries)
         {
@@ -94,26 +91,28 @@ public class DependsOnHandler : IndexHandler<Dictionary<string, List<string>>>
             }
         }
 
-        var serializedCurrent = JsonSerializer.Serialize(_content);
-        var serializedScanned = JsonSerializer.Serialize(dependsOn);
-        if (serializedCurrent != serializedScanned)
-        {
-            Content = dependsOn;
-            altered = true;
-        }
-
-        return altered;
+        if (!Persist(dependsOn))
+            return false;
+        _content = dependsOn;
+        return true;
     }
 
     /// <summary>
     /// Adds or updates dependency entries when a registry entry is written.
     /// First removes all previous entries for this package name, then adds the current
     /// dependency declarations from <see cref="PackageMeta.Depends"/>.
+    /// Persists to disk first; in-memory state is only updated on success.
     /// </summary>
     /// <param name="registry">The registry entry that was written.</param>
-    public override void OnWriteRegistry(PackageRegistry registry)
+    /// <returns><c>true</c> if the index was successfully persisted; otherwise, <c>false</c>.</returns>
+    public override bool OnWriteRegistry(PackageRegistry registry)
     {
-        var newContent = Content;
+        // Build new state in isolation — no mutation of _content yet
+        var newContent = new Dictionary<string, List<string>>(_content);
+        foreach (var key in _content.Keys)
+        {
+            newContent[key] = new List<string>(_content[key]);
+        }
 
         // First, remove all previous entries for this package
         RemovePackageEntries(newContent, registry.Meta.Name);
@@ -133,19 +132,38 @@ public class DependsOnHandler : IndexHandler<Dictionary<string, List<string>>>
             }
         }
 
-        Content = newContent;
+        // Write to disk atomically first
+        if (!Persist(newContent)) return false;
+
+        // Only update in-memory state after successful disk write
+        _content = newContent;
+        return true;
     }
 
     /// <summary>
     /// Removes all dependency entries for the specified package when a registry is removed.
     /// Cleans up any dependency keys that become empty after removal.
+    /// Persists to disk first; in-memory state is only updated on success.
     /// </summary>
     /// <param name="registry">The registry entry that was removed.</param>
-    public override void OnRemoveRegistry(PackageRegistry registry)
+    /// <returns><c>true</c> if the index was successfully persisted; otherwise, <c>false</c>.</returns>
+    public override bool OnRemoveRegistry(PackageRegistry registry)
     {
-        var newContent = Content;
+        // Build new state in isolation
+        var newContent = new Dictionary<string, List<string>>(_content);
+        foreach (var key in _content.Keys)
+        {
+            newContent[key] = new List<string>(_content[key]);
+        }
+
         RemovePackageEntries(newContent, registry.Meta.Name);
-        Content = newContent;
+
+        // Write to disk atomically first
+        if (!Persist(newContent)) return false;
+
+        // Only update in-memory state after successful disk write
+        _content = newContent;
+        return true;
     }
 
     /// <summary>

@@ -14,6 +14,8 @@ public class PackageListHandler : IndexHandler<Dictionary<string, VersionIdentif
     /// </summary>
     public const string FILE_NAME = "package_list.json";
 
+    protected override string FileName => FILE_NAME;
+
     private Dictionary<string, VersionIdentifier> _content;
 
     /// <summary>
@@ -26,17 +28,14 @@ public class PackageListHandler : IndexHandler<Dictionary<string, VersionIdentif
     }
 
     /// <summary>
-    /// Gets or sets the package name-to-version mapping and persists the data to disk on set.
+    /// Gets or sets the package name-to-version mapping.
+    /// Setting this property updates the in-memory state only.
+    /// Persistence is handled separately via <see cref="IndexHandler{T}.Persist"/>.
     /// </summary>
     public override Dictionary<string, VersionIdentifier> Content
     {
         get => _content;
-        set
-        {
-            _content = value;
-            File.WriteAllText(Path.Combine(IndexDirectory.FullName, FILE_NAME),
-                JsonSerializer.Serialize(_content));
-        }
+        set => _content = value;
     }
 
     /// <summary>
@@ -62,50 +61,62 @@ public class PackageListHandler : IndexHandler<Dictionary<string, VersionIdentif
     /// Note: virtual packages are managed separately by <see cref="VirtualPackagesHandler"/>.
     /// </summary>
     /// <param name="registries">The array of all registry entries to process.</param>
-    /// <returns><c>true</c> if the content was altered during the rebuild; otherwise, <c>false</c>.</returns>
+    /// <returns><c>true</c> if the rebuild was successful and the index was persisted; otherwise, <c>false</c>.</returns>
     public override bool OnRebuild(PackageRegistry[] registries)
     {
-        bool altered = false;
-
         var packageNames = new Dictionary<string, VersionIdentifier>();
         foreach (var registry in registries)
         {
             packageNames[registry.Meta.Name] = registry.Meta.Version;
         }
 
-        // Only write if the current list is different from the scanned result
-        var serializedCurrent = JsonSerializer.Serialize(_content);
-        var serializedScanned = JsonSerializer.Serialize(packageNames);
-        if (serializedCurrent != serializedScanned)
-        {
-            Content = packageNames;
-            altered = true;
-        }
-
-        return altered;
+        if (!Persist(_content))
+            return false;
+        _content = packageNames;
+        return true;
     }
 
     /// <summary>
     /// Adds or updates the package entry in the list when a registry entry is written.
+    /// Persists to disk first; in-memory state is only updated on success.
     /// Note: virtual packages are managed separately by <see cref="VirtualPackagesHandler"/>.
     /// </summary>
     /// <param name="registry">The registry entry that was written.</param>
-    public override void OnWriteRegistry(PackageRegistry registry)
+    /// <returns><c>true</c> if the index was successfully persisted; otherwise, <c>false</c>.</returns>
+    public override bool OnWriteRegistry(PackageRegistry registry)
     {
-        var newContent = Content;
-        newContent[registry.Meta.Name] = registry.Meta.Version;
-        Content = newContent;
+        // Build new state in isolation — no mutation of _content yet
+        var newContent = new Dictionary<string, VersionIdentifier>(_content)
+        {
+            [registry.Meta.Name] = registry.Meta.Version
+        };
+
+        // Write to disk atomically first
+        if (!Persist(newContent)) return false;
+
+        // Only update in-memory state after successful disk write
+        _content = newContent;
+        return true;
     }
 
     /// <summary>
     /// Removes the package entry from the list when a registry is removed.
+    /// Persists to disk first; in-memory state is only updated on success.
     /// Note: virtual packages are managed separately by <see cref="VirtualPackagesHandler"/>.
     /// </summary>
     /// <param name="registry">The registry entry that was removed.</param>
-    public override void OnRemoveRegistry(PackageRegistry registry)
+    /// <returns><c>true</c> if the index was successfully persisted; otherwise, <c>false</c>.</returns>
+    public override bool OnRemoveRegistry(PackageRegistry registry)
     {
-        var newContent = Content;
+        // Build new state in isolation
+        var newContent = new Dictionary<string, VersionIdentifier>(_content);
         newContent.Remove(registry.Meta.Name);
-        Content = newContent;
+
+        // Write to disk atomically first
+        if (!Persist(newContent)) return false;
+
+        // Only update in-memory state after successful disk write
+        _content = newContent;
+        return true;
     }
 }

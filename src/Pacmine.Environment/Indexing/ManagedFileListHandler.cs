@@ -20,6 +20,8 @@ public class ManagedFileListHandler : IndexHandler<Dictionary<string, ManagedFil
     /// </summary>
     public const string FILE_NAME = "managed_files.json";
 
+    protected override string FileName => FILE_NAME;
+
     private Dictionary<string, ManagedFileRecord> _content;
 
     /// <summary>
@@ -32,17 +34,14 @@ public class ManagedFileListHandler : IndexHandler<Dictionary<string, ManagedFil
     }
 
     /// <summary>
-    /// Gets or sets the file path-to-record mapping and persists the data to disk on set.
+    /// Gets or sets the file path-to-record mapping.
+    /// Setting this property updates the in-memory state only.
+    /// Persistence is handled separately via <see cref="IndexHandler{T}.Persist"/>.
     /// </summary>
     public override Dictionary<string, ManagedFileRecord> Content
     {
         get => _content;
-        set
-        {
-            _content = value;
-            File.WriteAllText(Path.Combine(IndexDirectory.FullName, FILE_NAME),
-                JsonSerializer.Serialize(_content));
-        }
+        set => _content = value;
     }
 
     /// <summary>
@@ -67,11 +66,9 @@ public class ManagedFileListHandler : IndexHandler<Dictionary<string, ManagedFil
     /// Only writes to disk if the scanned content differs from the current content.
     /// </summary>
     /// <param name="registries">The array of all registry entries to process.</param>
-    /// <returns><c>true</c> if the content was altered during the rebuild; otherwise, <c>false</c>.</returns>
+    /// <returns><c>true</c> if the rebuild was successful and the index was persisted; otherwise, <c>false</c>.</returns>
     public override bool OnRebuild(PackageRegistry[] registries)
     {
-        bool altered = false;
-
         var mngFiles = new Dictionary<string, ManagedFileRecord>();
         foreach (var registry in registries)
         {
@@ -81,25 +78,23 @@ public class ManagedFileListHandler : IndexHandler<Dictionary<string, ManagedFil
             }
         }
 
-        var serializedCurrent = JsonSerializer.Serialize(_content);
-        var serializedScanned = JsonSerializer.Serialize(mngFiles);
-        if (serializedCurrent != serializedScanned)
-        {
-            Content = mngFiles;
-            altered = true;
-        }
-
-        return altered;
+        if (!Persist(mngFiles))
+            return false;
+        _content = mngFiles;
+        return true;
     }
 
     /// <summary>
     /// Adds or updates managed file entries when a registry entry is written.
     /// Stale entries that are no longer in the registry's file list are removed.
+    /// Persists to disk first; in-memory state is only updated on success.
     /// </summary>
     /// <param name="registry">The registry entry that was written.</param>
-    public override void OnWriteRegistry(PackageRegistry registry)
+    /// <returns><c>true</c> if the index was successfully persisted; otherwise, <c>false</c>.</returns>
+    public override bool OnWriteRegistry(PackageRegistry registry)
     {
-        var newContent = Content;
+        // Build new state in isolation — no mutation of _content yet
+        var newContent = new Dictionary<string, ManagedFileRecord>(_content);
 
         // Remove stale managed file entries that belong to this package
         // but are no longer in the registry's file list
@@ -118,16 +113,24 @@ public class ManagedFileListHandler : IndexHandler<Dictionary<string, ManagedFil
             newContent[p.Key] = new ManagedFileRecord(registry.Meta.Name, p.Value);
         }
 
-        Content = newContent;
+        // Write to disk atomically first
+        if (!Persist(newContent)) return false;
+
+        // Only update in-memory state after successful disk write
+        _content = newContent;
+        return true;
     }
 
     /// <summary>
     /// Removes all managed file entries owned by the specified package when a registry is removed.
+    /// Persists to disk first; in-memory state is only updated on success.
     /// </summary>
     /// <param name="registry">The registry entry that was removed.</param>
-    public override void OnRemoveRegistry(PackageRegistry registry)
+    /// <returns><c>true</c> if the index was successfully persisted; otherwise, <c>false</c>.</returns>
+    public override bool OnRemoveRegistry(PackageRegistry registry)
     {
-        var newContent = Content;
+        // Build new state in isolation
+        var newContent = new Dictionary<string, ManagedFileRecord>(_content);
         var toRemove = newContent
             .Where(kvp => kvp.Value.Owner == registry.Meta.Name)
             .Select(kvp => kvp.Key)
@@ -136,6 +139,12 @@ public class ManagedFileListHandler : IndexHandler<Dictionary<string, ManagedFil
         {
             newContent.Remove(file);
         }
-        Content = newContent;
+
+        // Write to disk atomically first
+        if (!Persist(newContent)) return false;
+
+        // Only update in-memory state after successful disk write
+        _content = newContent;
+        return true;
     }
 }

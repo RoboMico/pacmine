@@ -112,13 +112,11 @@ public class DependsOnHandlerTests : IndexHandlerTestBase
     }
 
     [Fact]
-    public void ContentSetter_PersistsToDisk()
+    public void OnWriteRegistry_PersistsToDisk()
     {
         var handler = new DependsOnHandler(IndexDirectory);
-        handler.Content = new Dictionary<string, List<string>>
-        {
-            ["dep-x"] = ["dependent-a"]
-        };
+        handler.OnWriteRegistry(CreateRegistry("dependent-a", "1.0.0",
+            depends: new() { { "dep-x", new VersionRange("^1.0.0") } }));
 
         var loader = new DependsOnHandler(IndexDirectory);
         loader.OnLoad();

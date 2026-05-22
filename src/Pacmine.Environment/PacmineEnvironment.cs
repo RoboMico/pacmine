@@ -186,17 +186,17 @@ public class PacmineEnvironment : IDisposable
     }
 
     /// <summary>
-    /// Rebuilds the index files (package list, managed files, deny list) from the existing registry records.
+    /// Rebuilds the index files from the existing registry records.
     /// Call this to repair a corrupted environment where registry JSON files are intact
     /// but the auxiliary index files are missing or out of sync.
     /// </summary>
-    /// <returns><c>true</c> if any repairs were made; <c>false</c> if no registry records exist.</returns>
+    /// <returns><c>true</c> if repair is reported successful; <c>false</c> if failed or no registry records exist.</returns>
     public bool Repair()
     {
         if (!RegistryFolder.Exists)
             return false;
 
-        return _indexManager.Rebuild();
+        return _indexManager.TryRebuild();
     }
 
     /// <summary>
@@ -450,12 +450,18 @@ public class PacmineEnvironment : IDisposable
     }
 
     /// <summary>
-    /// Write a record into the package registry(create a new one or update existing one).
-    /// Stale managed file entries that are no longer in the package's file list are removed.
+    /// Attempts to write a record into the package registry (create a new one or update an existing one).
+    /// The index is updated first; the actual registry file is only written to disk if the index update succeeds.
     /// </summary>
     /// <param name="registry">The package registry to write.</param>
-    public void WriteRegistry(PackageRegistry registry)
+    /// <returns><c>true</c> if both the index and registry file were successfully written; <c>false</c> if the index update failed.</returns>
+    public bool TryWriteRegistry(PackageRegistry registry)
     {
+        // Update index first — only proceed if all handlers persist successfully
+        if (!_indexManager.OnWriteRegistry(registry))
+            return false;
+
+        // Only write registry file if index update succeeded
         char initLetter = registry.Meta.Name[0];
         DirectoryInfo layerDir = new(Path.Combine(RegistryFolder.FullName, initLetter.ToString()));
         if (!layerDir.Exists) layerDir.Create();
@@ -466,15 +472,17 @@ public class PacmineEnvironment : IDisposable
                 $"{registry.Meta.Name}.json"),
             JsonSerializer.Serialize(registry));
 
-        _indexManager.OnWriteRegistry(registry);
+        return true;
     }
 
     /// <summary>
-    /// Remove a record from the package registry.
+    /// Attempts to remove a record from the package registry.
+    /// The index is updated first; the actual registry file is only deleted if the index update succeeds.
     /// </summary>
     /// <param name="packageName">The name of the package to remove.</param>
-    /// <exception cref="Exception">Thrown when the package does not exist.</exception>
-    public void RemoveRegistry(string packageName)
+    /// <returns><c>true</c> if both the index and registry file were successfully removed;
+    /// <c>false</c> if the package does not exist or the index update failed.</returns>
+    public bool TryRemoveRegistry(string packageName)
     {
         char initLetter = packageName[0];
         var registryFile = new FileInfo(Path.Combine(
@@ -483,16 +491,19 @@ public class PacmineEnvironment : IDisposable
             $"{packageName}.json"));
 
         if (!registryFile.Exists)
-            throw new Exception($"Package '{packageName}' does not exist in the registry");
+            return false;
 
         // Read the registry before deleting it
         var registry = JsonSerializer.Deserialize<PackageRegistry>(
             File.ReadAllText(registryFile.FullName));
 
+        // Update index first — only proceed if all handlers persist successfully
+        if (registry != null && !_indexManager.OnRemoveRegistry(registry))
+            return false;
+
+        // Only delete registry file if index update succeeded (or registry was null/corrupt)
         registryFile.Delete();
-        // registry == null => registry file is corrupted, just ignore its content
-        if (registry != null)
-            _indexManager.OnRemoveRegistry(registry);
+        return true;
     }
 
     /// <summary>
@@ -593,7 +604,7 @@ public class PacmineEnvironment : IDisposable
     /// <returns>A dictionary mapping each relative file path to its SHA256 checksum.</returns>
     /// <remarks>
     /// This is a pure file system operation and have no effect on registry or index.
-    /// The caller should use <see cref="WriteRegistry"/> separately to persist the returned
+    /// The caller should use <see cref="TryWriteRegistry"/> separately to persist the returned
     /// file list as part of a <see cref="PackageRegistry"/>.
     /// </remarks>
     public Dictionary<string, string> UpdateFiles(string owner, DirectoryInfo source)

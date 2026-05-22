@@ -125,13 +125,10 @@ public class PackageListHandlerTests : IndexHandlerTestBase
     }
 
     [Fact]
-    public void ContentSetter_PersistsToDisk()
+    public void OnWriteRegistry_PersistsToDisk()
     {
         var handler = new PackageListHandler(IndexDirectory);
-        handler.Content = new Dictionary<string, VersionIdentifier>
-        {
-            { "persisted", new VersionIdentifier("1.0.0") }
-        };
+        handler.OnWriteRegistry(CreateRegistry("persisted", "1.0.0"));
 
         // Create a new handler and load from disk
         var loader = new PackageListHandler(IndexDirectory);

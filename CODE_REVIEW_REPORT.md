@@ -68,7 +68,7 @@ Happy-path test coverage is good. But across all modules, core pipeline methods 
 
 | # | Severity | Location | Issue |
 |---|----------|----------|-------|
-| E1 | **HIGH** | All handlers' `OnWriteRegistry` | In-memory state is mutated **before** `File.WriteAllText`. If the write fails, in-memory and on-disk state diverge. Affects all 5 handlers. |
+| ~~E1~~ | Fixed | All handlers' `OnWriteRegistry` | In-memory state is mutated **before** `File.WriteAllText`. If the write fails, in-memory and on-disk state diverge. Affects all 5 handlers. |
 | E2 | **MEDIUM** | `PacmineEnvironment.cs:488-494` | `RemoveRegistry` skips `OnRemoveRegistry` when registry JSON is corrupt but file exists — leaves stale index entries. |
 | E3 | **MEDIUM** | `PacmineEnvironment.cs:458` | No guard on empty package name — `Name[0]` throws `IndexOutOfRangeException`. |
 | E4 | **MEDIUM** | `PacmineEnvironment.cs:251-253` | Missing required handlers silently produces empty dictionaries, changing behavior without error. |

@@ -92,13 +92,11 @@ public class ManagedFileListHandlerTests : IndexHandlerTestBase
     }
 
     [Fact]
-    public void ContentSetter_PersistsToDisk()
+    public void OnWriteRegistry_PersistsToDisk()
     {
         var handler = new ManagedFileListHandler(IndexDirectory);
-        handler.Content = new Dictionary<string, ManagedFileRecord>
-        {
-            ["mods/persisted.jar"] = new ManagedFileRecord("pkg-a", "checksum123")
-        };
+        handler.OnWriteRegistry(CreateRegistry("pkg-a", "1.0.0",
+            fileList: new() { { "mods/persisted.jar", "checksum123" } }));
 
         var loader = new ManagedFileListHandler(IndexDirectory);
         loader.OnLoad();

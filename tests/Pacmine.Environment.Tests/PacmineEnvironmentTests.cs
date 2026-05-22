@@ -59,15 +59,15 @@ public class PacmineEnvironmentTests : IDisposable
         Assert.Throws<Exception>(() => PacmineEnvironment.Access("/nonexistent/path"));
     }
 
-    // ── WriteRegistry / GetRegistry / RemoveRegistry ─────────────────────
+    // ── TryWriteRegistry / GetRegistry / TryRemoveRegistry ───────────────
 
     [Fact]
-    public void WriteRegistry_ThenGetRegistry_ReturnsCorrectData()
+    public void TryWriteRegistry_ThenGetRegistry_ReturnsCorrectData()
     {
         using var env = PacmineEnvironment.Create(_tempDir);
 
         var registry = CreateTestRegistry("test-pkg", "1.0.0");
-        env.WriteRegistry(registry);
+        Assert.True(env.TryWriteRegistry(registry));
 
         var loaded = env.GetRegistry("test-pkg");
         Assert.NotNull(loaded);
@@ -76,21 +76,21 @@ public class PacmineEnvironmentTests : IDisposable
     }
 
     [Fact]
-    public void RemoveRegistry_RemovesPackage()
+    public void TryRemoveRegistry_RemovesPackage()
     {
         using var env = PacmineEnvironment.Create(_tempDir);
-        env.WriteRegistry(CreateTestRegistry("test-pkg", "1.0.0"));
+        Assert.True(env.TryWriteRegistry(CreateTestRegistry("test-pkg", "1.0.0")));
 
-        env.RemoveRegistry("test-pkg");
+        Assert.True(env.TryRemoveRegistry("test-pkg"));
 
         Assert.Null(env.GetRegistry("test-pkg"));
     }
 
     [Fact]
-    public void RemoveRegistry_NonExistentPackage_Throws()
+    public void TryRemoveRegistry_NonExistentPackage_ReturnsFalse()
     {
         using var env = PacmineEnvironment.Create(_tempDir);
-        Assert.Throws<Exception>(() => env.RemoveRegistry("nonexistent"));
+        Assert.False(env.TryRemoveRegistry("nonexistent"));
     }
 
     [Fact]
@@ -106,7 +106,7 @@ public class PacmineEnvironmentTests : IDisposable
     public void CheckAcceptance_NoConflictsOrDeps_ReturnsEmpty()
     {
         using var env = PacmineEnvironment.Create(_tempDir);
-        env.WriteRegistry(CreateTestRegistry("installed-pkg", "1.0.0"));
+        Assert.True(env.TryWriteRegistry(CreateTestRegistry("installed-pkg", "1.0.0")));
 
         var reasons = env.CheckAcceptance([
             CreateTestMeta("new-pkg", "1.0.0")
@@ -119,7 +119,7 @@ public class PacmineEnvironmentTests : IDisposable
     public void CheckAcceptance_ConflictWithInstalled_ReturnsConflictReason()
     {
         using var env = PacmineEnvironment.Create(_tempDir);
-        env.WriteRegistry(CreateTestRegistry("installed-pkg", "1.0.0"));
+        Assert.True(env.TryWriteRegistry(CreateTestRegistry("installed-pkg", "1.0.0")));
 
         var newPkg = CreateTestMeta("new-pkg", "1.0.0",
             conflicts: new() { { "installed-pkg", new VersionRange("^1.0.0") } });
@@ -149,8 +149,8 @@ public class PacmineEnvironmentTests : IDisposable
     {
         using var env = PacmineEnvironment.Create(_tempDir);
         // Installed package provides a virtual package
-        env.WriteRegistry(CreateTestRegistry("provider", "2.0.0",
-            provides: new() { { "virtual-lib", new VersionIdentifier("1.0.0") } }));
+        Assert.True(env.TryWriteRegistry(CreateTestRegistry("provider", "2.0.0",
+            provides: new() { { "virtual-lib", new VersionIdentifier("1.0.0") } })));
 
         // New package depends on the virtual package
         var newPkg = CreateTestMeta("consumer", "1.0.0",
@@ -165,7 +165,7 @@ public class PacmineEnvironmentTests : IDisposable
     public void CheckAcceptance_ReplacesInstalledPackage_ReturnsReplaceReason()
     {
         using var env = PacmineEnvironment.Create(_tempDir);
-        env.WriteRegistry(CreateTestRegistry("old-pkg", "1.0.0"));
+        Assert.True(env.TryWriteRegistry(CreateTestRegistry("old-pkg", "1.0.0")));
 
         var newPkg = CreateTestMeta("new-pkg", "2.0.0",
             replaces: new() { { "old-pkg", new VersionRange("*") } });
@@ -193,7 +193,7 @@ public class PacmineEnvironmentTests : IDisposable
     public void CheckCanUninstall_NoDependents_ReturnsEmpty()
     {
         using var env = PacmineEnvironment.Create(_tempDir);
-        env.WriteRegistry(CreateTestRegistry("standalone", "1.0.0"));
+        Assert.True(env.TryWriteRegistry(CreateTestRegistry("standalone", "1.0.0")));
 
         var reasons = env.CheckCanUninstall(["standalone"]);
 
@@ -204,9 +204,9 @@ public class PacmineEnvironmentTests : IDisposable
     public void CheckCanUninstall_HasDependents_ReturnsBreakDependReason()
     {
         using var env = PacmineEnvironment.Create(_tempDir);
-        env.WriteRegistry(CreateTestRegistry("dependency", "1.0.0"));
-        env.WriteRegistry(CreateTestRegistry("dependent", "2.0.0",
-            depends: new() { { "dependency", new VersionRange("^1.0.0") } }));
+        Assert.True(env.TryWriteRegistry(CreateTestRegistry("dependency", "1.0.0")));
+        Assert.True(env.TryWriteRegistry(CreateTestRegistry("dependent", "2.0.0",
+            depends: new() { { "dependency", new VersionRange("^1.0.0") } })));
 
         var reasons = env.CheckCanUninstall(["dependency"]);
 
@@ -231,8 +231,8 @@ public class PacmineEnvironmentTests : IDisposable
     public void CheckConflictFiles_FileManagedByOtherPackage_ReturnsConflict()
     {
         using var env = PacmineEnvironment.Create(_tempDir);
-        env.WriteRegistry(CreateTestRegistry("existing", "1.0.0",
-            fileList: new() { { "mods/foo.jar", "abc123" } }));
+        Assert.True(env.TryWriteRegistry(CreateTestRegistry("existing", "1.0.0",
+            fileList: new() { { "mods/foo.jar", "abc123" } })));
 
         var conflicts = env.CheckConflictFiles(["mods/foo.jar"], []);
 
@@ -244,8 +244,8 @@ public class PacmineEnvironmentTests : IDisposable
     public void CheckConflictFiles_FileManagedByIgnoredPackage_ReturnsNoConflict()
     {
         using var env = PacmineEnvironment.Create(_tempDir);
-        env.WriteRegistry(CreateTestRegistry("existing", "1.0.0",
-            fileList: new() { { "mods/foo.jar", "abc123" } }));
+        Assert.True(env.TryWriteRegistry(CreateTestRegistry("existing", "1.0.0",
+            fileList: new() { { "mods/foo.jar", "abc123" } })));
 
         var conflicts = env.CheckConflictFiles(["mods/foo.jar"], ["existing"]);
 

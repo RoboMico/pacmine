@@ -51,6 +51,23 @@ The `index/` directory contains cached, denormalized views of registry data for 
 
 Index files are automatically kept in sync with registry writes and removals. If they get out of sync (e.g., due to manual modification or file corruption), call `Repair()` to rebuild them from registry data.
 
+### Index Synchronization Guarantee
+
+All index writes use an **atomic write pattern** to prevent in-memory/on-disk divergence:
+
+1. New content is serialized to a temporary `.tmp` file
+2. The temp file is atomically renamed over the target file via `File.Move` (atomic on the same filesystem)
+3. In-memory state is only updated after the disk write succeeds
+
+If a write fails (disk full, permissions, I/O error), the in-memory state remains unchanged and the original index file is intact.
+
+Registry write/remove operations follow an **index-first** ordering:
+
+- `TryWriteRegistry()` updates the index first; the registry JSON file is only written to disk if all index handlers succeed
+- `TryRemoveRegistry()` updates the index first; the registry JSON file is only deleted if all index handlers succeed
+
+This guarantees that if registry data is present on disk, the index is guaranteed to be consistent with it.
+
 ## Usage
 
 ### Create an environment
@@ -76,8 +93,10 @@ int pid = PacmineEnvironment.GetLockerPid("/path/to/instance");
 
 Registry modification and file operations are handled in separate methods, allowing fine-grained control over the environment management process.
 
+`TryWriteRegistry()` returns `true` only if the index was successfully updated <b>and</b> the registry file was written. Returns `false` if any index handler failed to persist its data (disk full, I/O error, etc.) — in that case, the registry file is left unchanged. It is recommended to run `Repair()` afterwards in this case to avoid any inconsistency between different index handlers.
+
 ```csharp
-env.WriteRegistry(new PackageRegistry
+bool success = env.TryWriteRegistry(new PackageRegistry
 {
     Meta = new PackageMeta
     {
@@ -90,6 +109,11 @@ env.WriteRegistry(new PackageRegistry
     InstallReason = InstallReasons.Environment,
     InstalledTime = DateTime.UtcNow
 });
+
+if (!success)
+{
+    // Handle failure — e.g., retry or report insufficient disk space
+}
 ```
 
 ### Retrieve a registry record
@@ -110,7 +134,7 @@ Keep in mind that registry I/O and file system I/O are separate, so you can retr
 var fileList = env.UpdateFiles("sodium", new DirectoryInfo(tempDir));
 
 // Step 3: write the registry record to persist the file list
-env.WriteRegistry(new PackageRegistry
+bool success = env.TryWriteRegistry(new PackageRegistry
 {
     Meta = meta,
     FileList = fileList,
@@ -189,23 +213,27 @@ foreach (var (fileName, owner) in conflicts)
 
 ### Uninstall a package
 
+`TryRemoveRegistry()` returns `true` if the package was successfully removed from both the index and the registry. Returns `false` if the package does not exist, or if any index handler failed to persist (in which case the registry file is left intact).
+
 ```csharp
 // Delete the files owned by the package
 env.RemovePackageFiles("sodium");
 
 // Remove the registry record
-env.RemoveRegistry("sodium");
+bool success = env.TryRemoveRegistry("sodium");
 ```
 
 ### Forget about a package but keep its files
 
 ```csharp
-env.RemoveRegistry("sodium");
+bool success = env.TryRemoveRegistry("sodium");
 ```
+
+Note: `TryRemoveRegistry()` does **not** throw if the package is missing — it returns `false` instead.
 
 ### Repair the environment
 
-Rebuilds index files from registry records. Returns `true` if any repairs were made.
+Rebuilds index files from registry records. Returns `true` if repair is successful.
 
 ```csharp
 bool repaired = env.Repair();

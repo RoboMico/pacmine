@@ -96,7 +96,7 @@ public class IndexManagerTests : IndexHandlerTestBase
         var pkgList = new PackageListHandler(IndexDirectory);
         mgr.AddHandler(pkgList);
 
-        bool altered = mgr.Rebuild();
+        bool altered = mgr.TryRebuild();
 
         Assert.False(altered);
         Assert.Empty(pkgList.Content);

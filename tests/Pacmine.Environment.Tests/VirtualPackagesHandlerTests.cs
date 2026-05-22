@@ -91,16 +91,11 @@ public class VirtualPackagesHandlerTests : IndexHandlerTestBase
     }
 
     [Fact]
-    public void ContentSetter_PersistsToDisk()
+    public void OnWriteRegistry_PersistsToDisk()
     {
         var handler = new VirtualPackagesHandler(IndexDirectory);
-        handler.Content = new Dictionary<string, Dictionary<VersionIdentifier, List<string>>>
-        {
-            ["virtual-foo"] = new()
-            {
-                [new VersionIdentifier("1.0.0")] = ["provider-a"]
-            }
-        };
+        handler.OnWriteRegistry(CreateRegistry("provider-a", "1.0.0",
+            provides: new() { { "virtual-foo", new VersionIdentifier("1.0.0") } }));
 
         var loader = new VirtualPackagesHandler(IndexDirectory);
         loader.OnLoad();

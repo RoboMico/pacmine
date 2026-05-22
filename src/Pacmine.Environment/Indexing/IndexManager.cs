@@ -76,8 +76,8 @@ public class IndexManager
     /// then passes the pre-loaded array to every registered handler's
     /// <see cref="IndexHandler.OnRebuild(PackageRegistry[])"/> method.
     /// </summary>
-    /// <returns><c>true</c> if any handler reported that its content was altered; otherwise, <c>false</c>.</returns>
-    public bool Rebuild()
+    /// <returns><c>true</c> if all handlers successfully rebuilt; otherwise, <c>false</c>.</returns>
+    public bool TryRebuild()
     {
         // Scan registry directory once — all handlers share this single pass
         var registries = new List<PackageRegistry>();
@@ -108,36 +108,53 @@ public class IndexManager
 
         var registryArray = registries.ToArray();
 
-        bool altered = false;
+        bool allSucceeded = true;
         foreach (var handler in _handlers)
         {
-            altered |= handler.OnRebuild(registryArray);
+            if (!handler.OnRebuild(registryArray))
+                allSucceeded = false;
         }
-        return altered;
+        return allSucceeded;
     }
 
     /// <summary>
     /// Calls <see cref="IndexHandler.OnWriteRegistry(PackageRegistry)"/> on all registered handlers.
+    /// Returns <c>true</c> only if <b>all</b> handlers successfully persisted their index data.
+    /// If any handler fails, the in-memory state of that handler remains unchanged, and
+    /// <c>false</c> is returned. Since handlers are independent, a failure in one handler
+    /// does not roll back the others.
     /// </summary>
     /// <param name="registry">The registry entry that was written.</param>
-    public void OnWriteRegistry(PackageRegistry registry)
+    /// <returns><c>true</c> if all handlers successfully persisted; otherwise, <c>false</c>.</returns>
+    public bool OnWriteRegistry(PackageRegistry registry)
     {
+        bool allSucceeded = true;
         foreach (var handler in _handlers)
         {
-            handler.OnWriteRegistry(registry);
+            if (!handler.OnWriteRegistry(registry))
+                allSucceeded = false;
         }
+        return allSucceeded;
     }
 
     /// <summary>
     /// Calls <see cref="IndexHandler.OnRemoveRegistry(PackageRegistry)"/> on all registered handlers.
+    /// Returns <c>true</c> only if <b>all</b> handlers successfully persisted their index data.
+    /// If any handler fails, the in-memory state of that handler remains unchanged, and
+    /// <c>false</c> is returned. Since handlers are independent, a failure in one handler
+    /// does not roll back the others.
     /// </summary>
     /// <param name="registry">The registry entry that was removed.</param>
-    public void OnRemoveRegistry(PackageRegistry registry)
+    /// <returns><c>true</c> if all handlers successfully persisted; otherwise, <c>false</c>.</returns>
+    public bool OnRemoveRegistry(PackageRegistry registry)
     {
+        bool allSucceeded = true;
         foreach (var handler in _handlers)
         {
-            handler.OnRemoveRegistry(registry);
+            if (!handler.OnRemoveRegistry(registry))
+                allSucceeded = false;
         }
+        return allSucceeded;
     }
 
     /// <summary>

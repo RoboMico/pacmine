@@ -87,13 +87,11 @@ public class DenyListHandlerTests : IndexHandlerTestBase
     }
 
     [Fact]
-    public void ContentSetter_PersistsToDisk()
+    public void OnWriteRegistry_PersistsToDisk()
     {
         var handler = new DenyListHandler(IndexDirectory);
-        handler.Content = new Dictionary<string, Dictionary<string, VersionRange>>
-        {
-            ["pkg-a"] = new() { { "pkg-b", new VersionRange("^1.0.0") } }
-        };
+        handler.OnWriteRegistry(CreateRegistry("pkg-a", "1.0.0",
+            conflicts: new() { { "pkg-b", new VersionRange("^1.0.0") } }));
 
         var loader = new DenyListHandler(IndexDirectory);
         loader.OnLoad();
