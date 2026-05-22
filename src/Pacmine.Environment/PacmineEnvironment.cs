@@ -92,8 +92,8 @@ public class PacmineEnvironment : IDisposable
         catch (IOException ex)
         {
             var pid = GetLockerPid(path);
-            var extra = pid >= 0 ? $" by process {pid}" : "";
-            throw new IOException($"Environment is locked{extra}.", ex);
+            var extra = pid >= 0 ? $"(locked by process {pid})" : "";
+            throw new IOException($"Unable to access the environment{extra}.", ex);
         }
     }
 
@@ -420,7 +420,7 @@ public class PacmineEnvironment : IDisposable
                     if (uninstallSet.Contains(depender))
                         continue;
 
-                    // Read the dependent's registry (cached) to verify their exact version requirement.
+                    // Read the dependent's registry (cached) to verify their exact  version requirement.
                     var dependerRegistry = GetCachedRegistry(depender);
                     if (dependerRegistry == null) continue;
 

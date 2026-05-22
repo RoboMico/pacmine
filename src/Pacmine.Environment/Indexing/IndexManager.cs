@@ -5,7 +5,7 @@ namespace Pacmine.Environment.Indexing;
 /// <summary>
 /// Manages a collection of <see cref="IndexHandler"/> instances and broadcasts lifecycle events
 /// (load, rebuild, write registry, remove registry, initialize) to all registered handlers.
-/// Bound to both an index directory and a registry directory at construction.
+/// Bound to a registry directory at construction.
 /// </summary>
 public class IndexManager
 {

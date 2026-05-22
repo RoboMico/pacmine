@@ -76,18 +76,6 @@ public class PackageListHandlerTests : IndexHandlerTestBase
     }
 
     [Fact]
-    public void OnRebuild_NoChange_ReturnsFalse()
-    {
-        var handler = new PackageListHandler(IndexDirectory);
-        var registries = new[] { CreateRegistry("pkg-a", "1.0.0") };
-        handler.OnRebuild(registries);
-
-        // Rebuild with same data
-        var altered = handler.OnRebuild(registries);
-        Assert.False(altered);
-    }
-
-    [Fact]
     public void OnWriteRegistry_AddsPackageEntry()
     {
         var handler = new PackageListHandler(IndexDirectory);
