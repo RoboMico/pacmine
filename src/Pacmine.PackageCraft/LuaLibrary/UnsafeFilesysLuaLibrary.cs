@@ -39,7 +39,7 @@ public partial class UnsafeFilesysLuaLibrary : AbstractFilesysLuaLibrary
     [LuaMember("copy")]
     public void Copy(string source, string dest)
     {
-        File.Copy(ResolvePath(source), ResolvePath(dest));
+        File.Copy(ResolvePath(source), ResolvePath(dest), true);
     }
 
     /// <summary>
