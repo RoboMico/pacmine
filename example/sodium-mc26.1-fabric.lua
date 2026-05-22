@@ -64,8 +64,9 @@ recipe.source_checksums = {
 }
 
 function recipe.package()
-  local filename = "sodium-fabric-0.8.12+mc26.1.2.jar"
-  filesys:move("${SRCDIR}/" .. filename, "${PKGDIR}/" .. filename)
+  local filename = "sodium-fabric-" .. recipe.meta.version .. ".jar"
+  filesys:mkdir("${PKGDIR}/mods")
+  filesys:move("${SRCDIR}/" .. filename, "${PKGDIR}/mods/" .. filename)
 end
 
 return recipe
