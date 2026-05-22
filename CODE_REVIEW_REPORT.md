@@ -96,11 +96,11 @@ Happy-path test coverage is good. But across all modules, core pipeline methods 
 | ~~P1~~ | Invalid | `SourceFetchers.cs:221` | `git clone --revision <refspec>` — `--revision` is not a valid git flag. Git source fetching is broken. |
 | ~~P2~~ | Fixed | `RestrictedFilesysLuaLibrary.cs:90`, `UnsafeFilesysLuaLibrary.cs:42` | `File.Copy` without `overwrite: true`. Existing destination files cause `IOException` — build pipeline will fail on re-runs. |
 | ~~P3~~ | Works as Intended | `SourceFetchers.cs:72-73` | `LocalFileSourceFetcher` uses `Path.Combine` without normalization — vulnerable to path traversal (`../` segments escape the working directory). |
-| P4 | **MEDIUM** | `PackageMetaLuaObject.cs:172`, `PackageCraftRecipeLuaObject.cs:123` | `FromLuaTable` calls `.Read<T>()` on every field without checking for `LuaValueType.Nil` — absent optional fields cause runtime exceptions. |
-| P5 | **MEDIUM** | `PackageBuilder.cs:151,191,196` | No bounds checking on `index` parameter in `FetchSourceAsync` and `VerifySourceAsync`. |
-| P6 | **MEDIUM** | `PackageBuilder.cs:127-136` | `OutputDirectory` is never created before `CompressPackageAsync` writes to it. |
-| P7 | **LOW** | `SourceFetchers.cs:114` | `DownloadService` (IDisposable) never disposed in `RemoteSourceFetcher`. |
-| P8 | **LOW** | `PackageBuilder.cs:129,146,294` | Dead null checks on non-nullable-typed properties — misleading code. |
+| ~~P4~~ | Invalid | `PackageMetaLuaObject.cs:172`, `PackageCraftRecipeLuaObject.cs:123` | `FromLuaTable` calls `.Read<T>()` on every field without checking for `LuaValueType.Nil` — absent optional fields cause runtime exceptions. |
+| ~~P5~~ | Won't Fix | `PackageBuilder.cs:151,191,196` | No bounds checking on `index` parameter in `FetchSourceAsync` and `VerifySourceAsync`. |
+| ~~P6~~ | Fixed | `PackageBuilder.cs:127-136` | `OutputDirectory` is never created before `CompressPackageAsync` writes to it. |
+| ~~P7~~ | Fixed | `SourceFetchers.cs:114` | `DownloadService` (IDisposable) never disposed in `RemoteSourceFetcher`. |
+| ~~P8~~ | Fixed | `PackageBuilder.cs:129,146,294` | Dead null checks on non-nullable-typed properties — misleading code. |
 
 **Test Gaps:**
 - `FetchSourceAsync`, `VerifySourceAsync`, `CompressPackageAsync` — untested

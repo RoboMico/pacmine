@@ -111,7 +111,7 @@ public class RemoteSourceFetcher : SourceFetcher
     /// <exception cref="InvalidOperationException">Thrown when the download completes but no file name was reported by the server.</exception>
     public override async Task<FileSystemInfo> FetchAsync(string url)
     {
-        DownloadService dlService = new(DownloadConfig);
+        using DownloadService dlService = new(DownloadConfig);
         string fileName = "";
         dlService.DownloadStarted += (s, e) =>
         {

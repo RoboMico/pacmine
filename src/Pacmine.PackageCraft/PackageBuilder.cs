@@ -34,10 +34,10 @@ public class PackageBuilder : IDisposable
     /// </summary>
     /// <param name="luaState">A pre-configured Lua state (libraries already registered by the factory).</param>
     /// <param name="recipe">The recipe defining the build configuration.</param>
-    /// <param name="workingDirectory">The working directory, or <c>null</c>.</param>
+    /// <param name="workingDirectory">The working directory.</param>
     /// <param name="sourceDirectory">The source directory.</param>
     /// <param name="packageDirectory">The package staging directory.</param>
-    /// <param name="outputDirectory">The output directory, or <c>null</c> (defaults to working directory).</param>
+    /// <param name="outputDirectory">The output directory.</param>
     /// <param name="gitCommand">The Git command path, or <c>null</c> if Git is disabled.</param>
     /// <param name="downloadConfig">The download configuration.</param>
     internal PackageBuilder(
@@ -121,18 +121,14 @@ public class PackageBuilder : IDisposable
     public ChannelReader<string> StderrReader => _stderrChannel.Reader;
 
     /// <summary>
-    /// Creates the source and package directories if they don't exist.
+    /// Creates the source, package and output directories if they don't exist.
     /// Must be called before fetching sources.
     /// </summary>
     public void InitializeDirectories()
     {
-        if (SourceDirectory == null)
-            throw new InvalidOperationException("SourceDirectory is not configured.");
-        if (PackageDirectory == null)
-            throw new InvalidOperationException("PackageDirectory is not configured.");
-
-        SourceDirectory.Create();
-        PackageDirectory.Create();
+        Directory.CreateDirectory(SourceDirectory.FullName);
+        Directory.CreateDirectory(PackageDirectory.FullName);
+        Directory.CreateDirectory(OutputDirectory.FullName);
     }
 
     /// <summary>
@@ -143,11 +139,6 @@ public class PackageBuilder : IDisposable
     /// <exception cref="Exception">Thrown when the required directories are not configured.</exception>
     public async Task FetchSourceAsync(int index)
     {
-        if (SourceDirectory == null)
-        {
-            throw new Exception("Source directory is not configured");
-        }
-
         var src = Recipe.Sources[index];
         SourceFetcher fetcher;
 
@@ -167,8 +158,6 @@ public class PackageBuilder : IDisposable
         else
         {
             // Local file copy
-            if (WorkingDirectory == null)
-                throw new InvalidOperationException("WorkingDirectory is not configured but source is a local file: " + src);
             fetcher = new LocalFileSourceFetcher(SourceDirectory, WorkingDirectory);
         }
 
@@ -179,7 +168,8 @@ public class PackageBuilder : IDisposable
     /// Verifies the checksum of a fetched source file at the specified index.
     /// </summary>
     /// <param name="index">The index of the source to verify.</param>
-    /// <returns>A task representing the asynchronous operation, returning <c>true</c> if the checksum is valid or skipped; otherwise, <c>false</c>.</returns>
+    /// <returns>A task representing the asynchronous operation, returning <c>true</c> if the checksum is valid or skipped;
+    /// otherwise, <c>false</c>. Checks on folders always return <c>false</c> unless they are explicitly skipped.</returns>
     /// <exception cref="Exception">Thrown when the checksum algorithm is not supported.</exception>
     public async Task<bool> VerifySourceAsync(int index)
     {
@@ -214,7 +204,6 @@ public class PackageBuilder : IDisposable
 
         if (entry is DirectoryInfo)
         {
-            // Always consider the folder source invalid; checks of folders must be explicitly skipped
             return false;
         }
 
@@ -291,10 +280,6 @@ public class PackageBuilder : IDisposable
     /// <exception cref="Exception">Thrown when package or output directories are not configured.</exception>
     public async Task CompressPackageAsync()
     {
-        if (PackageDirectory == null || OutputDirectory == null)
-        {
-            throw new Exception("Package or Output directory is not configured");
-        }
         File.WriteAllText(Path.Combine(PackageDirectory.FullName, PackageParser.META_FILE_NAME), JsonSerializer.Serialize(Recipe.Meta));
         ZipFile.CreateFromDirectory(
             PackageDirectory.FullName,
@@ -306,8 +291,8 @@ public class PackageBuilder : IDisposable
     /// </summary>
     public void CleanUp()
     {
-        SourceDirectory?.Delete(true);
-        PackageDirectory?.Delete(true);
+        SourceDirectory.Delete(true);
+        PackageDirectory.Delete(true);
     }
 
     /// <summary>
