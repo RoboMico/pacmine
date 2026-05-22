@@ -28,7 +28,15 @@ All the modules share the same version number. Every new release bumps the versi
 
 ## Documentation
 
-soon
+Check online documentation at <https://pacmine.robomico.cn> or build the docs site locally:
+
+```bash
+# Install DocFX global tool (if you haven't)
+dotnet tool install -g docfx
+# Build the documentation and start a local server
+docfx docfx/docfx.json --serve
+# Now go to http://localhost:8080 in your browser
+```
 
 ## Integrating Guides
 

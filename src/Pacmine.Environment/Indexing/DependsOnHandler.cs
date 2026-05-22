@@ -9,7 +9,7 @@ namespace Pacmine.Environment.Indexing;
 /// serving as a reverse dependency index.
 /// </summary>
 /// <remarks>
-/// Content type: <c>Dictionary<string, List<string>></c>
+/// Content type: <c>Dictionary&lt;string, List&lt;string&gt;&gt;</c>
 /// <list type="bullet">
 ///   <item>Key: A package name (real or virtual) that is depended upon</item>
 ///   <item>Value: List of package names that declare this as a dependency</item>

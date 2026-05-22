@@ -28,7 +28,15 @@ Pacmine 作为一个 C# 库，采用模块化设计。你可以只包含你需�
 
 ## 文档
 
-soon
+查看在线文档：<https://pacmine.robomico.cn>，或者本地构建文档网站：
+
+```bash
+# 安装 DocFX 全局工具（如果没有安装过的话）
+dotnet tool install -g docfx
+# 构建文档并启动网站服务器
+docfx docfx/docfx.json --serve
+# 在浏览器打开网址 http://localhost:8080 
+```
 
 ## 集成指南
 
