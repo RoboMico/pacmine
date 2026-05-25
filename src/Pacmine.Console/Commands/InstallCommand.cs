@@ -58,15 +58,8 @@ internal static class InstallCommand
             ConsoleHelper.WriteError("Downloading remote packages is not yet implemented. Install local packages with flag --local.");
             System.Environment.Exit(1);
         }
-        root ??= System.Environment.CurrentDirectory;
-        int locker = PacmineEnvironment.GetLockerPid(root);
-        if (locker > 0)
-        {
-            ConsoleHelper.WriteError($"The directory is locked by process {locker}.");
-            System.Environment.Exit(1);
-        }
 
-        using var env = PacmineEnvironment.Access(root);
+        using var env = CommandHelper.AccessEnvironment(root);
 
         // ═══════════════════════════════════════════════════════════════
         // Phase 1: Read all package archives and collect metadata
@@ -222,7 +215,11 @@ internal static class InstallCommand
 
         // 2d. Topological sort — dependencies must be installed before dependents.
         var batchNames = packageInfos.Select(p => p.Meta.Name).ToHashSet();
-        var installOrder = TopologicalSort(packageInfos, batchNames);
+        var installOrder = CommandHelper.TopologicalSort(
+            packageInfos,
+            p => p.Meta.Name,
+            p => p.Meta.Depends.Keys,
+            batchNames);
 
         // ── Warn about reinstalling / downgrading packages ──────────
         foreach (var (_, meta, _, _) in installOrder)
@@ -291,9 +288,7 @@ internal static class InstallCommand
         // ── Confirmation prompt ──────────────────────────────────────
         PrintInstallPlan(installOrder, env);
 
-        Console.Write("Continue? [Y/n] ");
-        var response = Console.ReadLine()?.Trim().ToLowerInvariant();
-        if (response != "y" && response != "yes" && response != "")
+        if (!CommandHelper.ConfirmPrompt())
         {
             ConsoleHelper.WriteWarning("Installation cancelled.");
             env.Dispose();
@@ -374,7 +369,9 @@ internal static class InstallCommand
             Console.Write(meta.Name.PadRight(maxNameLen));
 
             Console.Write("    ");
+            Console.ForegroundColor = ConsoleColor.DarkGray;
             Console.Write(oldVer.PadRight(maxOldLen));
+            Console.ResetColor();
             Console.Write("    ");
 
             if (existing == null)
@@ -452,66 +449,6 @@ internal static class InstallCommand
     }
 
     /// <summary>
-    /// Performs a topological sort on the batch of packages so that dependencies
-    /// are installed before the packages that depend on them.
-    /// </summary>
-    private static List<(string ArchivePath, PackageMeta Meta, DateTime PackagedTime, List<string> FileNames)> TopologicalSort(
-        List<(string ArchivePath, PackageMeta Meta, DateTime PackagedTime, List<string> FileNames)> packages,
-        HashSet<string> batchNames)
-    {
-        var inDegree = new Dictionary<string, int>();
-        var adjacency = new Dictionary<string, List<string>>();
-
-        foreach (var (_, meta, _, _) in packages)
-        {
-            inDegree[meta.Name] = 0;
-            adjacency[meta.Name] = [];
-        }
-
-        foreach (var (_, meta, _, _) in packages)
-        {
-            foreach (var (depName, _) in meta.Depends)
-            {
-                if (batchNames.Contains(depName))
-                {
-                    adjacency[depName].Add(meta.Name);
-                    inDegree[meta.Name]++;
-                }
-            }
-        }
-
-        // Kahn's algorithm
-        var queue = new Queue<string>();
-        foreach (var (name, degree) in inDegree)
-        {
-            if (degree == 0)
-                queue.Enqueue(name);
-        }
-
-        var sorted = new List<string>();
-        while (queue.Count > 0)
-        {
-            var current = queue.Dequeue();
-            sorted.Add(current);
-            foreach (var dependent in adjacency[current])
-            {
-                inDegree[dependent]--;
-                if (inDegree[dependent] == 0)
-                    queue.Enqueue(dependent);
-            }
-        }
-
-        if (sorted.Count != packages.Count)
-        {
-            ConsoleHelper.WriteError("Circular dependency detected within the batch. Cannot determine install order.");
-            System.Environment.Exit(1);
-        }
-
-        var nameToInfo = packages.ToDictionary(p => p.Meta.Name);
-        return sorted.Select(name => nameToInfo[name]).ToList();
-    }
-
-    /// <summary>
     /// Installs a single package into the environment: extracts the archive to a temp directory,
     /// copies files via <see cref="PacmineEnvironment.UpdateFiles"/>, and persists the registry record.
     /// File conflicts must have been pre-checked in Phase 2e before calling this method.
@@ -547,7 +484,7 @@ internal static class InstallCommand
         }
         catch
         {
-            TryDeleteDirectory(tempDir);
+            CommandHelper.TryDeleteDirectory(tempDir);
             throw;
         }
 
@@ -559,7 +496,7 @@ internal static class InstallCommand
         }
         catch (Exception ex)
         {
-            TryDeleteDirectory(tempDir);
+            CommandHelper.TryDeleteDirectory(tempDir);
             throw new IOException($"Failed to install files for {meta.Name}: {ex.Message}", ex);
         }
 
@@ -574,7 +511,7 @@ internal static class InstallCommand
         });
 
         // 4. Clean up the temporary directory
-        TryDeleteDirectory(tempDir);
+        CommandHelper.TryDeleteDirectory(tempDir);
 
         if (!writeSuccess)
         {
@@ -583,19 +520,4 @@ internal static class InstallCommand
         }
     }
 
-    /// <summary>
-    /// Attempts to delete a directory and all its contents, swallowing any exceptions.
-    /// </summary>
-    private static void TryDeleteDirectory(string path)
-    {
-        try
-        {
-            if (Directory.Exists(path))
-                Directory.Delete(path, true);
-        }
-        catch
-        {
-            // Best-effort cleanup
-        }
-    }
 }
