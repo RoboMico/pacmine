@@ -23,6 +23,7 @@
 
   <ItemGroup>
     <ProjectReference Include="..\..\src\Pacmine.Core\Pacmine.Core.csproj" />
+    <ProjectReference Include="..\Pacmine.TestUtils\Pacmine.TestUtils.csproj" />
   </ItemGroup>
 
 </Project>

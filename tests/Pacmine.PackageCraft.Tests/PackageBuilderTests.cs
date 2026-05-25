@@ -292,7 +292,7 @@ public class PackageBuilderTests
             Assert.Equal("1.2.3", deserialized.Version.RawString);
 
             // Verify zip was created
-            var zipPath = Path.Combine(outDir, "meta-test-1.2.3-1.pacminepack.zip");
+            var zipPath = Path.Combine(outDir, "meta-test-1.2.3#1.pacminepack.zip");
             Assert.True(File.Exists(zipPath));
         }
         finally

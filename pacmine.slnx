@@ -3,6 +3,7 @@
   <Project Path="src/Pacmine.PackageCraft/Pacmine.PackageCraft.csproj" />
   <Project Path="src/Pacmine.Environment/Pacmine.Environment.csproj" />
   <Project Path="src/Pacmine.Console/Pacmine.Console.csproj" />
+  <Project Path="tests/Pacmine.TestUtils/Pacmine.TestUtils.csproj" />
   <Project Path="tests/Pacmine.Core.Tests/Pacmine.Core.Tests.csproj" />
   <Project Path="tests/Pacmine.Environment.Tests/Pacmine.Environment.Tests.csproj" />
   <Project Path="tests/Pacmine.PackageCraft.Tests/Pacmine.PackageCraft.Tests.csproj" />

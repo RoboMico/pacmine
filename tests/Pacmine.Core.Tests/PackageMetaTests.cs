@@ -77,20 +77,61 @@ public class PackageMetaTests
         Assert.Empty(meta.Recommends);
     }
 
+    // ── Recommends ────────────────────────────────────────────────────────
+
+    [Fact]
+    public void Recommends_DefaultIsEmpty()
+    {
+        var meta = CreateMinimalMeta();
+        Assert.Empty(meta.Recommends);
+    }
+
+    [Fact]
+    public void Recommends_CanAddRecommendations()
+    {
+        var meta = CreateMinimalMeta();
+        meta.Recommends = new()
+        {
+            { "helper-mod", "Provides additional QoL features" },
+            { "shader-pack", "Enhances visual quality" }
+        };
+
+        Assert.Equal(2, meta.Recommends.Count);
+        Assert.Equal("Provides additional QoL features", meta.Recommends["helper-mod"]);
+        Assert.Equal("Enhances visual quality", meta.Recommends["shader-pack"]);
+    }
+
+    [Fact]
+    public void Recommends_SerializesAndDeserializes()
+    {
+        var meta = CreateMinimalMeta(name: "recommend-test", version: "1.0.0");
+        meta.Recommends = new()
+        {
+            { "opt-dep", "Optional dependency" }
+        };
+
+        var json = System.Text.Json.JsonSerializer.Serialize(meta);
+        var deserialized = System.Text.Json.JsonSerializer.Deserialize<PackageMeta>(json);
+
+        Assert.NotNull(deserialized);
+        Assert.Single(deserialized!.Recommends);
+        Assert.Equal("Optional dependency", deserialized.Recommends["opt-dep"]);
+    }
+
     // ── GetFullVersionString ─────────────────────────────────────────────
 
     [Fact]
     public void GetFullVersionString_NoEpoch_ReturnsVersionRelease()
     {
         var meta = CreateMinimalMeta(version: "1.0.0", release: 1, epoch: 0);
-        Assert.Equal("1.0.0-1", meta.GetFullVersionString());
+        Assert.Equal("1.0.0#1", meta.GetFullVersionString());
     }
 
     [Fact]
     public void GetFullVersionString_WithEpoch_IncludesEpochPrefix()
     {
         var meta = CreateMinimalMeta(version: "1.0.0", release: 2, epoch: 1);
-        Assert.Equal("1:1.0.0-2", meta.GetFullVersionString());
+        Assert.Equal("1:1.0.0#2", meta.GetFullVersionString());
     }
 
     // ── IsNewerThan ──────────────────────────────────────────────────────

@@ -299,7 +299,7 @@ public class PacmineEnvironment : IDisposable
         {
             var registryFolder = Directory.CreateDirectory(Path.Combine(spFolderPath, REGISTRY_FOLDER_NAME));
             PacmineEnvironment env = new(directory);
-            env.PackageListFile.Create();
+            env.PackageListFile.Create().Dispose();
             env._lockStream = lockStream;
             return env;
         }

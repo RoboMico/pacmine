@@ -110,4 +110,23 @@ public class JsonConverterTests
         Assert.True(deserialized["pkg-a"].Contains(new VersionIdentifier("1.5.0")));
         Assert.True(deserialized["pkg-b"].Contains(new VersionIdentifier("2.0.1")));
     }
+
+    [Fact]
+    public void VersionIdentifier_AsPropertyName_Roundtrips()
+    {
+        var dict = new Dictionary<VersionIdentifier, string>
+        {
+            { new VersionIdentifier("1.0.0"), "stable" },
+            { new VersionIdentifier("2.0.0-beta"), "prerelease" }
+        };
+
+        var options = new JsonSerializerOptions();
+        var json = JsonSerializer.Serialize(dict, options);
+        var deserialized = JsonSerializer.Deserialize<Dictionary<VersionIdentifier, string>>(json, options);
+
+        Assert.NotNull(deserialized);
+        Assert.Equal(2, deserialized!.Count);
+        Assert.Equal("stable", deserialized[new VersionIdentifier("1.0.0")]);
+        Assert.Equal("prerelease", deserialized[new VersionIdentifier("2.0.0-beta")]);
+    }
 }

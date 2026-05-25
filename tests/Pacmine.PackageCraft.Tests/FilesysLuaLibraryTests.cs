@@ -1,5 +1,6 @@
 using Xunit;
 using Pacmine.PackageCraft.LuaLibrary;
+using Pacmine.TestUtils;
 
 namespace Pacmine.PackageCraft.Tests;
 
@@ -173,7 +174,7 @@ public class FilesysLuaLibraryTests
         var restricted = new RestrictedFilesysLuaLibrary(srcDir.DirInfo, pkgDir.DirInfo);
 
         // If srcDir is /tmp/abc, a path under /tmp/abc-other should NOT be allowed
-        var prefixTraversalDir = new TempDirectory();
+        using var prefixTraversalDir = new TempDirectory();
         var traversalPath = prefixTraversalDir.Path + "-evil";
         Directory.CreateDirectory(traversalPath);
         var fileInTraversalPath = Path.Combine(traversalPath, "file.txt");
@@ -190,7 +191,7 @@ public class FilesysLuaLibraryTests
         var restricted = new RestrictedFilesysLuaLibrary(srcDir.DirInfo, pkgDir.DirInfo);
 
         // Deleting the source directory itself is not a child operation
-        Assert.Throws<UnauthorizedAccessException>(() => restricted.Delete(srcDir.Path));
+        Assert.Throws<UnauthorizedAccessException>(() => { restricted.Delete(srcDir.Path); });
     }
 
     [Fact]
@@ -300,28 +301,5 @@ public class FilesysLuaLibraryTests
         unsafeLib.CreateDirectory(outsidePath);
 
         Assert.True(Directory.Exists(outsidePath));
-    }
-
-    // ── Helper: TempDirectory ────────────────────────────────────────────
-
-    /// <summary>
-    /// Creates a temporary directory and cleans it up on disposal.
-    /// </summary>
-    private class TempDirectory : IDisposable
-    {
-        public string Path { get; }
-        public DirectoryInfo DirInfo => new(Path);
-
-        public TempDirectory()
-        {
-            Path = System.IO.Path.Combine(System.IO.Path.GetTempPath(), "PacmineTest", Guid.NewGuid().ToString());
-            Directory.CreateDirectory(Path);
-        }
-
-        public void Dispose()
-        {
-            try { Directory.Delete(Path, recursive: true); }
-            catch { /* ignore cleanup failures */ }
-        }
     }
 }
