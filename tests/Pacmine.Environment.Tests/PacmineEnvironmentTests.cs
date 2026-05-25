@@ -127,7 +127,7 @@ public class PacmineEnvironmentTests : IDisposable
         var reasons = env.CheckAcceptance([newPkg]);
 
         Assert.NotEmpty(reasons);
-        Assert.IsType<ConflictUnacceptReason>(reasons[0]);
+        Assert.IsType<ConflictInvalidReason>(reasons[0]);
     }
 
     [Fact]
@@ -141,7 +141,7 @@ public class PacmineEnvironmentTests : IDisposable
         var reasons = env.CheckAcceptance([newPkg]);
 
         Assert.NotEmpty(reasons);
-        Assert.IsType<MissingDependsUnacceptReason>(reasons[0]);
+        Assert.IsType<MissingDependsInvalidReason>(reasons[0]);
     }
 
     [Fact]
@@ -173,7 +173,7 @@ public class PacmineEnvironmentTests : IDisposable
         var reasons = env.CheckAcceptance([newPkg]);
 
         Assert.NotEmpty(reasons);
-        Assert.IsType<PackageReplacedUnacceptReason>(reasons[0]);
+        Assert.IsType<PackageReplacedInvalidReason>(reasons[0]);
     }
 
     // ── CheckCanUninstall ────────────────────────────────────────────────

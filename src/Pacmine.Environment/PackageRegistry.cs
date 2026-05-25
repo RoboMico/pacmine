@@ -32,4 +32,22 @@ public class PackageRegistry
     /// Gets or sets the date and time when the package was installed.
     /// </summary>
     public DateTime InstalledTime { get; set; }
+
+    /// <summary>
+    /// Checks whether the package's files conflict with another package's files.
+    /// </summary>
+    /// <param name="other">The other package to check against.</param>
+    /// <returns><c>true</c> if this package has conflicting files with the other package;
+    /// otherwise, <c>false</c>.</returns>
+    public bool AreFilesConflictingWith(PackageRegistry other)
+    {
+        foreach (var f in FileList)
+        {
+            if (other.FileList.ContainsKey(f.Key))
+            {
+                return true;
+            }
+        }
+        return false;
+    }
 }

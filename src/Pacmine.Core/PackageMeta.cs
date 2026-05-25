@@ -133,47 +133,29 @@ public partial class PackageMeta
     /// Determines whether this package conflicts with the specified package.
     /// Checks both direct package-to-package conflict declarations and virtual packages
     /// (i.e. packages provided via the <see cref="Provides"/> property).
-    /// Virtual packages have their own explicit versions (from <see cref="Provides"/>),
-    /// which are used when checking version ranges — they are NOT inherited from the provider.
     /// </summary>
     /// <param name="other">The other package to check against.</param>
     /// <returns><c>true</c> if this package conflicts with the other package; otherwise, <c>false</c>.</returns>
     public bool IsConflictingWith(PackageMeta other)
     {
-        // Check if this package's Conflicts covers the other package (by its own name)
-        if (Conflicts.TryGetValue(other.Name, out var range))
+        static Dictionary<string, VersionIdentifier> MetaToDict(PackageMeta meta)
         {
-            if (range.Contains(other.Version))
-                return true;
+            var dict = meta.Provides.ToDictionary(x => x.Key, x => x.Value);
+            dict.Add(meta.Name, meta.Version);
+            return dict;
         }
-
-        // Check if this package's Conflicts covers any virtual package that the other provides
-        foreach (var (virtualName, virtualVersion) in other.Provides)
+        static bool DictViolatesConflictList(
+            Dictionary<string, VersionIdentifier> dict,
+            Dictionary<string, VersionRange> conflicts)
         {
-            if (Conflicts.TryGetValue(virtualName, out var virtualRange))
+            foreach (var c in conflicts)
             {
-                if (virtualRange.Contains(virtualVersion))
+                if (dict.TryGetValue(c.Key, out var v) && c.Value.Contains(v))
                     return true;
             }
+            return false;
         }
-
-        // Check if the other package's Conflicts covers this package (by its own name)
-        if (other.Conflicts.TryGetValue(Name, out var otherRange))
-        {
-            if (otherRange.Contains(Version))
-                return true;
-        }
-
-        // Check if the other package's Conflicts covers any virtual package that this provides
-        foreach (var (virtualName, virtualVersion) in Provides)
-        {
-            if (other.Conflicts.TryGetValue(virtualName, out var otherVirtualRange))
-            {
-                if (otherVirtualRange.Contains(virtualVersion))
-                    return true;
-            }
-        }
-
-        return false;
+        return DictViolatesConflictList(MetaToDict(this), other.Conflicts)
+            || DictViolatesConflictList(MetaToDict(other), this.Conflicts);
     }
 }

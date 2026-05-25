@@ -131,59 +131,86 @@ internal static class InstallCommand
         // ═══════════════════════════════════════════════════════════════
         ConsoleHelper.WriteInfo("Validating packages...");
 
-        // 2a. Check for duplicate package names in the batch
-        var nameSet = new HashSet<string>();
-        foreach (var (_, meta, _, _) in packageInfos)
-        {
-            if (!nameSet.Add(meta.Name))
-            {
-                ConsoleHelper.WriteError($"Duplicate package in batch: {meta.Name}");
-                env.Dispose();
-                System.Environment.Exit(1);
-            }
-        }
-
-        // 2b. Check internal conflicts between batch members
-        for (int i = 0; i < packageInfos.Count; i++)
-        {
-            for (int j = i + 1; j < packageInfos.Count; j++)
-            {
-                if (packageInfos[i].Meta.IsConflictingWith(packageInfos[j].Meta))
-                {
-                    ConsoleHelper.WriteError(
-                        $"Internal conflict: {packageInfos[i].Meta.Name} conflicts with {packageInfos[j].Meta.Name}");
-                    env.Dispose();
-                    System.Environment.Exit(1);
-                }
-            }
-        }
-
-        // 2c. Check acceptance against the environment (called once for the whole batch)
         var allMetas = packageInfos.Select(p => p.Meta).ToArray();
-        var allReasons = env.CheckAcceptance(allMetas);
-        var refusedNames = allReasons.Select(r => r.RefusedPackageName).ToHashSet();
 
-        // Print any acceptance errors
+        // 2a. Validate the batch internally using PackageRelationUtil.CheckSet.
+        //     This catches duplicate names, internal conflicts, missing dependencies,
+        //     and replacement violations within the batch.
+        var batchReasons = PackageRelationUtil.CheckSet(allMetas);
+        var fatalBatchReasons = batchReasons
+            .Where(r => r is DuplicateNameInvalidReason or ConflictInvalidReason)
+            .ToArray();
+
+        foreach (var reason in fatalBatchReasons)
+        {
+            switch (reason)
+            {
+                case DuplicateNameInvalidReason d:
+                    ConsoleHelper.WriteError($"Duplicate package in batch: {d.TargetPackageName}");
+                    break;
+                case ConflictInvalidReason c:
+                    ConsoleHelper.WriteError($"Internal conflict: {c.TargetPackageName} conflicts with {c.ConflictingPackageName}");
+                    break;
+            }
+        }
+
+        if (fatalBatchReasons.Length > 0)
+        {
+            env.Dispose();
+            System.Environment.Exit(1);
+        }
+
+        // Separate batch packages into upgrades (names already in environment) and new installs.
+        var existingMetas = env.PackageRegistry.Values.Select(r => r.Meta).ToArray();
+        var existingNameSet = existingMetas.Select(m => m.Name).ToHashSet();
+
+        var upgradeInfos = packageInfos
+            .Where(p => existingNameSet.Contains(p.Meta.Name))
+            .ToList();
+        var newInstallInfos = packageInfos
+            .Where(p => !existingNameSet.Contains(p.Meta.Name))
+            .ToList();
+
+        // 2b. Build the simulated base: existing metas minus upgraded ones, plus upgraded metas.
+        //     Then validate with CheckSet to catch issues caused by version changes.
+        var removedNames = upgradeInfos.Select(p => p.Meta.Name).ToHashSet();
+        var simulatedBase = existingMetas
+            .Where(m => !removedNames.Contains(m.Name))
+            .Concat(upgradeInfos.Select(p => p.Meta))
+            .ToArray();
+        var upgradeReasons = PackageRelationUtil.CheckSet(simulatedBase);
+
+        // 2c. Validate new installs against the simulated base using CheckAdd.
+        var newInstallMetas = newInstallInfos.Select(p => p.Meta).ToArray();
+        var addReasons = newInstallMetas.Length > 0
+            ? PackageRelationUtil.CheckAdd(simulatedBase, newInstallMetas)
+            : [];
+
+        // Merge all acceptance reasons (from both upgrade simulation and new install check).
+        var allReasons = upgradeReasons.Concat(addReasons).ToArray();
+        var refusedNames = allReasons.Select(r => r.TargetPackageName).ToHashSet();
+
+        // Print acceptance errors.
         foreach (var reason in allReasons)
         {
             switch (reason)
             {
-                case ConflictUnacceptReason c:
+                case ConflictInvalidReason c:
                     ConsoleHelper.WriteError(
-                        $"Package {c.RefusedPackageName} conflicts with package {c.ConflictingPackageName} (version range {c.ConflictingVersions})");
+                        $"Package {c.TargetPackageName} conflicts with package {c.ConflictingPackageName}");
                     break;
-                case MissingDependsUnacceptReason m:
+                case MissingDependsInvalidReason m:
                     ConsoleHelper.WriteError(
-                        $"Package {m.RefusedPackageName} has unsatisfied dependency: {m.MissingDependName} {m.DesiredVersions}");
+                        $"Package {m.TargetPackageName} has unsatisfied dependency: {m.MissingDependName} {m.DesiredVersions}");
                     break;
-                case PackageReplacedUnacceptReason r:
+                case PackageReplacedInvalidReason r:
                     ConsoleHelper.WriteError(
-                        $"Package {r.RefusedPackageName} would replace {r.ReplacedPackageName}");
+                        $"Package {r.TargetPackageName} would replace {r.ReplacedPackageName}");
                     break;
             }
         }
 
-        // Remove refused packages from the batch
+        // Remove refused packages from the batch.
         packageInfos.RemoveAll(p => refusedNames.Contains(p.Meta.Name));
 
         if (packageInfos.Count == 0)
@@ -193,14 +220,14 @@ internal static class InstallCommand
             System.Environment.Exit(1);
         }
 
-        // 2d. Topological sort — dependencies must be installed before dependents
+        // 2d. Topological sort — dependencies must be installed before dependents.
         var batchNames = packageInfos.Select(p => p.Meta.Name).ToHashSet();
         var installOrder = TopologicalSort(packageInfos, batchNames);
 
         // ── Warn about reinstalling / downgrading packages ──────────
         foreach (var (_, meta, _, _) in installOrder)
         {
-            var existing = env.GetRegistry(meta.Name);
+            env.PackageRegistry.TryGetValue(meta.Name, out var existing);
             if (existing == null)
                 continue;
             if (meta.Version == existing.Meta.Version &&
@@ -263,7 +290,7 @@ internal static class InstallCommand
         {
             if (meta.Name.Length > maxNameLen)
                 maxNameLen = meta.Name.Length;
-            var existing = env.GetRegistry(meta.Name);
+            env.PackageRegistry.TryGetValue(meta.Name, out var existing);
             if (existing != null)
             {
                 var oldVer = existing.Meta.GetFullVersionString();
@@ -291,7 +318,7 @@ internal static class InstallCommand
         // Print each row
         foreach (var (_, meta, _, _) in installOrder)
         {
-            var existing = env.GetRegistry(meta.Name);
+            env.PackageRegistry.TryGetValue(meta.Name, out var existing);
             var newVer = meta.GetFullVersionString();
             var oldVer = existing?.Meta.GetFullVersionString() ?? "-";
             var isUpgrade = existing != null && meta.IsNewerThan(existing.Meta);
@@ -452,7 +479,7 @@ internal static class InstallCommand
         ConsoleHelper.WriteInfo($"Installing {meta.Name} {meta.GetFullVersionString()}...");
 
         // 1. Check file conflicts
-        var existing = env.GetRegistry(meta.Name);
+        env.PackageRegistry.TryGetValue(meta.Name, out var existing);
         var ignoredOwners = existing != null ? [meta.Name] : Array.Empty<string>();
         var conflicts = env.CheckConflictFiles([.. fileNames], ignoredOwners);
         bool hasFatal = false;

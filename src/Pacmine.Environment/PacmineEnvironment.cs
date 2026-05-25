@@ -1,8 +1,6 @@
 using System.Security.Cryptography;
 using System.Text;
 using System.Text.Json;
-using Pacmine.Core;
-using Pacmine.Environment.Indexing;
 
 namespace Pacmine.Environment;
 
@@ -13,7 +11,6 @@ namespace Pacmine.Environment;
 public class PacmineEnvironment : IDisposable
 {
     private static JsonSerializerOptions _jsonOptions = new() { WriteIndented = true };
-    private IndexManager _indexManager = null!;
     private FileStream? _lockStream;
 
     /// <summary>
@@ -32,17 +29,19 @@ public class PacmineEnvironment : IDisposable
     public const string LOCKFILE_NAME = "lock";
 
     /// <summary>
-    /// The name of the index folder storing quickly accessible data to avoid full scan on registry.
+    /// The name of the package list file used as a cache storing names of all installed packages.
+    /// Each line in this plain-text file contains one package name.
     /// </summary>
-    public const string INDEX_FOLDER_NAME = "index";
+    public const string PACKAGE_LIST_FILE_NAME = "package_list";
 
     private PacmineEnvironment(string path)
     {
         RootPath = path;
         SpecialFolder = new(Path.Combine(path, SPECIAL_FOLDER_NAME));
         RegistryFolder = new(Path.Combine(SpecialFolder.FullName, REGISTRY_FOLDER_NAME));
-        IndexFolder = new(Path.Combine(SpecialFolder.FullName, INDEX_FOLDER_NAME));
         LockFile = new(Path.Combine(SpecialFolder.FullName, LOCKFILE_NAME));
+        PackageListFile = new(Path.Combine(SpecialFolder.FullName, PACKAGE_LIST_FILE_NAME));
+        PackageRegistry = [];
     }
 
     /// <summary>
@@ -61,20 +60,130 @@ public class PacmineEnvironment : IDisposable
     public DirectoryInfo RegistryFolder { get; private set; }
 
     /// <summary>
-    /// Gets the index folder directory for this environment.
-    /// </summary>
-    public DirectoryInfo IndexFolder { get; private set; }
-
-    /// <summary>
     /// Gets the lock file information for this environment.
     /// </summary>
     public FileInfo LockFile { get; private set; }
 
     /// <summary>
-    /// Gets the <see cref="Indexing.IndexManager"/> that manages the index files
-    /// (package list, managed files, deny list) for this environment.
+    /// Gets the package list file information for this environment.
     /// </summary>
-    public IndexManager IndexManager => _indexManager;
+    public FileInfo PackageListFile { get; private set; }
+
+    /// <summary>
+    /// Gets the full in-memory copy of the package registry, keyed by package name.
+    /// Populated at construction time from the on-disk registry and updated dynamically
+    /// by registry operations. Can be manually refreshed by calling <see cref="Scan"/>.
+    /// </summary>
+    public Dictionary<string, PackageRegistry> PackageRegistry { get; private set; }
+
+    /// <summary>
+    /// Scans the registry folder for all package JSON files, reloads the in-memory
+    /// <see cref="PackageRegistry"/> dictionary, and rebuilds the <c>package_list</c>
+    /// cache file from scratch.
+    /// </summary>
+    /// <remarks>
+    /// This method ignores the existing <c>package_list</c> file and enumerates all
+    /// <c>.json</c> files directly under the registry folder. After scanning, the
+    /// <c>package_list</c> is rewritten to match the in-memory dictionary keys.
+    /// </remarks>
+    public void Scan()
+    {
+        PackageRegistry.Clear();
+
+        if (!RegistryFolder.Exists)
+            return;
+
+        // Enumerate all .json files recursively under the registry folder
+        foreach (var jsonFile in RegistryFolder.EnumerateFiles("*.json", SearchOption.AllDirectories))
+        {
+            try
+            {
+                var registry = JsonSerializer.Deserialize<PackageRegistry>(
+                    File.ReadAllText(jsonFile.FullName));
+                if (registry != null)
+                    PackageRegistry[registry.Meta.Name] = registry;
+            }
+            catch
+            {
+                // Skip corrupt or unreadable files
+            }
+        }
+
+        SavePackageNameList();
+    }
+
+    /// <summary>
+    /// Loads the package registry into memory using the <c>package_list</c> file
+    /// as a reference. For each package name listed in the file, the corresponding
+    /// JSON file in the registry folder is deserialized and added to <see cref="PackageRegistry"/>.
+    /// </summary>
+    private void LoadRegistryFromDisk()
+    {
+        var names = LoadPackageNameList();
+        foreach (var name in names)
+        {
+            if (string.IsNullOrWhiteSpace(name))
+                continue;
+
+            char initLetter = name[0];
+            var registryFile = new FileInfo(Path.Combine(
+                RegistryFolder.FullName,
+                initLetter.ToString(),
+                $"{name}.json"));
+
+            if (!registryFile.Exists)
+                continue;
+
+            try
+            {
+                var registry = JsonSerializer.Deserialize<PackageRegistry>(
+                    File.ReadAllText(registryFile.FullName));
+                if (registry != null)
+                    PackageRegistry[registry.Meta.Name] = registry;
+            }
+            catch
+            {
+                // Skip corrupt or unreadable files
+            }
+        }
+    }
+
+    /// <summary>
+    /// Reads the <c>package_list</c> file and returns the list of package names.
+    /// Each line in the file corresponds to one package name.
+    /// </summary>
+    private List<string> LoadPackageNameList()
+    {
+        if (!PackageListFile.Exists)
+            return [];
+
+        try
+        {
+            return [.. File.ReadAllLines(PackageListFile.FullName)
+                .Select(l => l.Trim())
+                .Where(l => !string.IsNullOrEmpty(l))];
+        }
+        catch
+        {
+            return [];
+        }
+    }
+
+    /// <summary>
+    /// Writes the <c>package_list</c> file with one package name per line,
+    /// derived from the current keys of the in-memory <see cref="PackageRegistry"/>.
+    /// </summary>
+    private void SavePackageNameList()
+    {
+        try
+        {
+            File.WriteAllLines(PackageListFile.FullName, PackageRegistry.Keys);
+        }
+        catch
+        {
+            // Best-effort write
+        }
+    }
 
     private static void LockDirectory(string path, out FileStream lockStream)
     {
@@ -161,9 +270,7 @@ public class PacmineEnvironment : IDisposable
         try
         {
             env.Lock();
-            env._indexManager = new(env.RegistryFolder);
-            RegisterDefaultHandlers(env._indexManager, env.IndexFolder);
-            env._indexManager.Load();
+            env.LoadRegistryFromDisk();
             return env;
         }
         catch
@@ -172,32 +279,6 @@ public class PacmineEnvironment : IDisposable
             throw;
         }
 
-    }
-
-    /// <summary>
-    /// Registers the standard set of index handlers into the <see cref="IndexManager"/>.
-    /// </summary>
-    private static void RegisterDefaultHandlers(IndexManager manager, DirectoryInfo indexFolder)
-    {
-        manager.AddHandler(new PackageListHandler(indexFolder));
-        manager.AddHandler(new VirtualPackagesHandler(indexFolder));
-        manager.AddHandler(new DependsOnHandler(indexFolder));
-        manager.AddHandler(new ManagedFileListHandler(indexFolder));
-        manager.AddHandler(new DenyListHandler(indexFolder));
-    }
-
-    /// <summary>
-    /// Rebuilds the index files from the existing registry records.
-    /// Call this to repair a corrupted environment where registry JSON files are intact
-    /// but the auxiliary index files are missing or out of sync.
-    /// </summary>
-    /// <returns><c>true</c> if repair is reported successful; <c>false</c> if failed or no registry records exist.</returns>
-    public bool Repair()
-    {
-        if (!RegistryFolder.Exists)
-            return false;
-
-        return _indexManager.TryRebuild();
     }
 
     /// <summary>
@@ -217,17 +298,9 @@ public class PacmineEnvironment : IDisposable
         try
         {
             var registryFolder = Directory.CreateDirectory(Path.Combine(spFolderPath, REGISTRY_FOLDER_NAME));
-            var indexFolder = Directory.CreateDirectory(Path.Combine(spFolderPath, INDEX_FOLDER_NAME));
-
-            // Initialize index files while holding the lock
-            var indexManager = new IndexManager(registryFolder);
-            RegisterDefaultHandlers(indexManager, indexFolder);
-            indexManager.Initialize();
-
-            // Create environment and wire up the already-acquired resources
             PacmineEnvironment env = new(directory);
+            env.PackageListFile.Create();
             env._lockStream = lockStream;
-            env._indexManager = indexManager;
             return env;
         }
         catch
@@ -239,276 +312,59 @@ public class PacmineEnvironment : IDisposable
     }
 
     /// <summary>
-    /// Checks if the specified packages are acceptable in the environment (no conflict, dependencies satisfied, etc).
-    /// Note that this method does not check the internal compatibility of <paramref name="packages"/> parameter.
-    /// See <see cref="PackageMeta.IsConflictingWith(PackageMeta)"/> for that.
-    /// You may also want to check for potentially conflicting files with <see cref="CheckConflictFiles(string[],string[])"/>.
-    /// </summary>
-    /// <param name="packages">The package list to check.</param>
-    /// <returns>An array of <see cref="UnacceptReason"/> indicating why each package is unacceptable.
-    /// An empty array indicates that all packages fit in.</returns>
-    public UnacceptReason[] CheckAcceptance(PackageMeta[] packages)
-    {
-        var reasons = new List<UnacceptReason>();
-        var packList = _indexManager.GetHandler<PackageListHandler>()?.Content ?? [];
-        var denyList = _indexManager.GetHandler<DenyListHandler>()?.Content ?? [];
-        var virtualPkgs = _indexManager.GetHandler<VirtualPackagesHandler>()?.Content ?? [];
-
-        foreach (var pkgMeta in packages)
-        {
-            // 1. Check DenyList: any installed package denies this package?
-            //    DenyList is keyed by conflict source (installed package name),
-            //    value maps denied package name → version range.
-            foreach (var (conflictSource, deniedPackages) in denyList)
-            {
-                // Check the package's own name
-                if (deniedPackages.TryGetValue(pkgMeta.Name, out var range))
-                {
-                    if (range.Contains(pkgMeta.Version))
-                        reasons.Add(new ConflictUnacceptReason(pkgMeta.Name, conflictSource, range));
-                }
-
-                // Check virtual packages this package provides
-                foreach (var (virtualName, virtualVersion) in pkgMeta.Provides)
-                {
-                    if (deniedPackages.TryGetValue(virtualName, out var virtualRange))
-                    {
-                        if (virtualRange.Contains(virtualVersion))
-                            reasons.Add(new ConflictUnacceptReason(pkgMeta.Name, conflictSource, virtualRange));
-                    }
-                }
-            }
-
-            // 2. Check this package's own Conflicts against installed packages
-            //    (the reverse direction — the incoming package denies an installed one)
-            //    Check both real packages and virtual packages.
-            foreach (var (conflictedPkg, conflictRange) in pkgMeta.Conflicts)
-            {
-                bool conflictFound = false;
-
-                // Check against real installed packages
-                if (packList!.TryGetValue(conflictedPkg, out var installedVersion))
-                {
-                    if (conflictRange.Contains(installedVersion))
-                        conflictFound = true;
-                }
-
-                // Check against virtual packages provided by installed packages
-                if (!conflictFound && virtualPkgs!.TryGetValue(conflictedPkg, out var virtualVersions))
-                {
-                    foreach (var version in virtualVersions.Keys)
-                    {
-                        if (conflictRange.Contains(version))
-                        {
-                            conflictFound = true;
-                            break;
-                        }
-                    }
-                }
-
-                if (conflictFound)
-                    reasons.Add(new ConflictUnacceptReason(pkgMeta.Name, conflictedPkg, conflictRange));
-            }
-
-            // 3. Check missing or unsatisfied dependencies.
-            //    A dependency can be satisfied by either a real installed package,
-            //    a virtual package provided by any installed package,
-            //    or another package in the packages parameter.
-            foreach (var (depName, depRange) in pkgMeta.Depends)
-            {
-                bool satisfied = false;
-
-                // Check against real installed packages
-                if (packList!.TryGetValue(depName, out var installedVersion))
-                {
-                    if (depRange.Contains(installedVersion))
-                        satisfied = true;
-                }
-
-                // Check against virtual packages provided by installed packages
-                if (!satisfied && virtualPkgs!.TryGetValue(depName, out var virtualVersions))
-                {
-                    foreach (var version in virtualVersions.Keys)
-                    {
-                        if (depRange.Contains(version))
-                        {
-                            satisfied = true;
-                            break;
-                        }
-                    }
-                }
-
-                // Check against other packages in the packages parameter
-                if (!satisfied)
-                {
-                    foreach (var otherPkg in packages)
-                    {
-                        if (ReferenceEquals(otherPkg, pkgMeta))
-                            continue;
-
-                        // Check if the other package's own name matches the dependency
-                        if (otherPkg.Name == depName && depRange.Contains(otherPkg.Version))
-                        {
-                            satisfied = true;
-                            break;
-                        }
-
-                        // Check if the other package provides the dependency as a virtual package
-                        if (otherPkg.Provides.TryGetValue(depName, out var providedVersion)
-                            && depRange.Contains(providedVersion))
-                        {
-                            satisfied = true;
-                            break;
-                        }
-                    }
-                }
-
-                if (!satisfied)
-                    reasons.Add(new MissingDependsUnacceptReason(pkgMeta.Name, depName, depRange));
-            }
-
-            // 4. Check if this package replaces any already-installed package
-            //    The version range determines which installed versions are affected.
-            foreach (var (replacedPkg, replaceRange) in pkgMeta.Replaces)
-            {
-                if (packList.TryGetValue(replacedPkg, out var installedVersion)
-                    && replaceRange.Contains(installedVersion))
-                {
-                    reasons.Add(new PackageReplacedUnacceptReason(pkgMeta.Name, replacedPkg));
-                }
-            }
-        }
-
-        return reasons.ToArray();
-    }
-
-    /// <summary>
-    /// Determines whether the specified set of packages can be safely uninstalled.
-    /// Checks for non-existent packages, reverse dependencies (real and virtual),
-    /// and version-aware virtual package dependency satisfaction.
-    /// </summary>
-    /// <param name="packages">The array of package names to check for uninstall.</param>
-    /// <returns>An array of <see cref="UninstallDenyReason"/> indicating why each package cannot be uninstalled.
-    /// An empty array indicates that the operation is safe.</returns>
-    public UninstallDenyReason[] CheckCanUninstall(string[] packages)
-    {
-        var reasons = new List<UninstallDenyReason>();
-        var uninstallSet = packages.ToHashSet();
-
-        var packList = _indexManager.GetHandler<PackageListHandler>()?.Content ?? [];
-        var dependsOn = _indexManager.GetHandler<DependsOnHandler>()?.Content ?? [];
-        var virtualPkgs = _indexManager.GetHandler<VirtualPackagesHandler>()?.Content;
-
-        // Pre-load registries for any dependent packages referenced in dependsOn
-        // to avoid O(n*m) individual disk reads in the virtual-package check loop below.
-        var registryCache = new Dictionary<string, PackageRegistry?>(StringComparer.Ordinal);
-        PackageRegistry? GetCachedRegistry(string name)
-        {
-            if (!registryCache.TryGetValue(name, out var reg))
-            {
-                reg = GetRegistry(name);
-                registryCache[name] = reg;
-            }
-            return reg;
-        }
-
-        foreach (var pkgName in packages)
-        {
-            // 1. Existence check
-            if (!packList.ContainsKey(pkgName))
-            {
-                reasons.Add(new NotExistDenyReason(pkgName));
-                continue;
-            }
-
-            // 2. Check real-name reverse dependencies (version-agnostic — a real package name is unique)
-            if (dependsOn.TryGetValue(pkgName, out var dependents))
-            {
-                foreach (var depender in dependents)
-                {
-                    if (!uninstallSet.Contains(depender))
-                    {
-                        reasons.Add(new BreakDependDenyReason(pkgName, depender));
-                    }
-                }
-            }
-
-            // 3. Check virtual package reverse dependencies (version-aware)
-            var registry = GetCachedRegistry(pkgName);
-            if (registry == null) continue;
-
-            foreach (var (virtualName, providedVersion) in registry.Meta.Provides)
-            {
-                if (!dependsOn.TryGetValue(virtualName, out var virtualDeps))
-                    continue;
-
-                foreach (var depender in virtualDeps)
-                {
-                    if (uninstallSet.Contains(depender))
-                        continue;
-
-                    // Read the dependent's registry (cached) to verify their exact  version requirement.
-                    var dependerRegistry = GetCachedRegistry(depender);
-                    if (dependerRegistry == null) continue;
-
-                    // Does this dependent actually require the version being removed?
-                    if (!dependerRegistry.Meta.Depends.TryGetValue(virtualName, out var requiredRange))
-                        continue;
-
-                    if (!requiredRange.Contains(providedVersion))
-                        continue;  // dependent needs a different version — not affected
-
-                    // Check if another provider (of any version) satisfies the dependent's requirement
-                    bool otherProviderExists = virtualPkgs != null
-                        && virtualPkgs.TryGetValue(virtualName, out var versionDict)
-                        && versionDict.Any(kvp =>
-                            requiredRange.Contains(kvp.Key)
-                            && kvp.Value.Any(p => !uninstallSet.Contains(p)));
-
-                    if (!otherProviderExists)
-                    {
-                        reasons.Add(new BreakDependDenyReason(pkgName, depender));
-                    }
-                }
-            }
-        }
-
-        return reasons.Distinct().ToArray();
-    }
-
-    /// <summary>
-    /// Attempts to write a record into the package registry (create a new one or update an existing one).
-    /// The index is updated first; the actual registry file is only written to disk if the index update succeeds.
+    /// Writes a package registry record to disk and updates the in-memory
+    /// <see cref="PackageRegistry"/> dictionary and the <c>package_list</c> cache.
     /// </summary>
     /// <param name="registry">The package registry to write.</param>
-    /// <returns><c>true</c> if both the index and registry file were successfully written; <c>false</c> if the index update failed.</returns>
+    /// <returns><c>true</c> if the registry was successfully written; <c>false</c> otherwise.</returns>
     public bool TryWriteRegistry(PackageRegistry registry)
     {
-        // Update index first — only proceed if all handlers persist successfully
-        if (!_indexManager.OnWriteRegistry(registry))
-            return false;
-
-        // Only write registry file if index update succeeded
         char initLetter = registry.Meta.Name[0];
         DirectoryInfo layerDir = new(Path.Combine(RegistryFolder.FullName, initLetter.ToString()));
         if (!layerDir.Exists) layerDir.Create();
-
-        File.WriteAllText(
-            Path.Combine(
-                layerDir.FullName,
-                $"{registry.Meta.Name}.json"),
-            JsonSerializer.Serialize(registry, _jsonOptions));
-
+        string targetPath = Path.Combine(layerDir.FullName, $"{registry.Meta.Name}.json");
+        string tmpPath = targetPath + ".tmp";
+        string restorePath = targetPath + ".old";
+        try
+        {
+            File.WriteAllText(tmpPath, JsonSerializer.Serialize(registry, _jsonOptions));
+            if (File.Exists(targetPath))
+                File.Move(targetPath, restorePath, true);
+            File.Move(tmpPath, targetPath, true);
+            if (File.Exists(restorePath))
+                File.Delete(restorePath);
+            // Update in-memory dictionary and name list cache
+            PackageRegistry[registry.Meta.Name] = registry;
+            SavePackageNameList();
+        }
+        catch
+        {
+            try
+            {
+                if (File.Exists(tmpPath))
+                    File.Delete(tmpPath);
+                if (File.Exists(restorePath))
+                {
+                    File.Move(restorePath, targetPath, true);
+                    File.Delete(restorePath);
+                }
+            }
+            catch
+            {
+                // best-effort restore
+            }
+            return false;
+        }
         return true;
     }
 
     /// <summary>
-    /// Attempts to remove a record from the package registry.
-    /// The index is updated first; the actual registry file is only deleted if the index update succeeds.
+    /// Removes a package registry record from disk and from the in-memory
+    /// <see cref="PackageRegistry"/> dictionary and the <c>package_list</c> cache.
     /// </summary>
     /// <param name="packageName">The name of the package to remove.</param>
-    /// <returns><c>true</c> if both the index and registry file were successfully removed;
-    /// <c>false</c> if the package does not exist or the index update failed.</returns>
+    /// <returns><c>true</c> if the package was successfully removed;
+    /// <c>false</c> otherwise or if the package does not exist.</returns>
     public bool TryRemoveRegistry(string packageName)
     {
         char initLetter = packageName[0];
@@ -520,35 +376,32 @@ public class PacmineEnvironment : IDisposable
         if (!registryFile.Exists)
             return false;
 
-        // Read the registry before deleting it
-        var registry = JsonSerializer.Deserialize<PackageRegistry>(
-            File.ReadAllText(registryFile.FullName));
-
-        // Update index first — only proceed if all handlers persist successfully
-        if (registry != null && !_indexManager.OnRemoveRegistry(registry))
+        try
+        {
+            registryFile.Delete();
+            // Remove from in-memory dictionary and name list cache
+            PackageRegistry.Remove(packageName);
+            SavePackageNameList();
+        }
+        catch
+        {
+            // best-effort attempt, no way to restore
             return false;
-
-        // Only delete registry file if index update succeeded (or registry was null/corrupt)
-        registryFile.Delete();
+        }
         return true;
     }
 
     /// <summary>
     /// Remove all files owned by the specified package from disk.
-    /// This is a pure file system operation and have no effect on registry or index.
+    /// This is a pure file system operation and has no effect on the registry or name list.
     /// </summary>
     /// <param name="packageName">The name of the package whose files to remove.</param>
     public void RemovePackageFiles(string packageName)
     {
-        var mngHandler = _indexManager.GetHandler<ManagedFileListHandler>();
-        if (mngHandler == null) return;
+        if (!PackageRegistry.TryGetValue(packageName, out var reg))
+            return;
 
-        var ownedFiles = mngHandler.Content
-            .Where(kvp => kvp.Value.Owner == packageName)
-            .Select(kvp => kvp.Key)
-            .ToList();
-
-        foreach (var filePath in ownedFiles)
+        foreach (var filePath in reg.FileList.Keys)
         {
             var fullPath = Path.Combine(RootPath, filePath);
             try
@@ -573,17 +426,28 @@ public class PacmineEnvironment : IDisposable
     /// An empty owner string indicates an orphan file (exists on disk but not managed by any package).</returns>
     public Dictionary<string, string> CheckConflictFiles(string[] fileNames, string[] ignoredOwners)
     {
+        // Build file-to-owner mapping from the in-memory package registry
+        var mngFiles = new Dictionary<string, string>();
+        foreach (var (pkgName, pkgReg) in PackageRegistry)
+        {
+            foreach (var filePath in pkgReg.FileList.Keys)
+            {
+                // Last write wins if multiple packages claim the same file
+                // (impossible case in a valid environment, but just in case)
+                mngFiles[filePath] = pkgName;
+            }
+        }
+
         var conflicts = new Dictionary<string, string>();
-        var mngFiles = _indexManager.GetHandler<ManagedFileListHandler>()?.Content;
 
         foreach (var fileName in fileNames)
         {
             // Check if the file is managed by a package not in the ignored list
-            if (mngFiles?.TryGetValue(fileName, out var record) == true)
+            if (mngFiles.TryGetValue(fileName, out var owner))
             {
-                if (!ignoredOwners.Contains(record.Owner))
+                if (!ignoredOwners.Contains(owner))
                 {
-                    conflicts[fileName] = record.Owner;
+                    conflicts[fileName] = owner;
                 }
             }
             // Check if the file exists on disk but is not managed (orphan file)
@@ -601,26 +465,6 @@ public class PacmineEnvironment : IDisposable
     }
 
     /// <summary>
-    /// Get the package registry of the specified package.
-    /// </summary>
-    /// <param name="packageName">The name of the package to get the registry of.</param>
-    /// <returns>The registry record, or <c>null</c> if the package does not exist.</returns>
-    public PackageRegistry? GetRegistry(string packageName)
-    {
-        char initLetter = packageName[0];
-        var registryFile = new FileInfo(Path.Combine(
-            RegistryFolder.FullName,
-            initLetter.ToString(),
-            $"{packageName}.json"));
-
-        if (!registryFile.Exists)
-            return null;
-
-        return JsonSerializer.Deserialize<PackageRegistry>(
-            File.ReadAllText(registryFile.FullName));
-    }
-
-    /// <summary>
     /// Install or update files from the specified source directory into the environment.
     /// All files in the source directory are considered to be owned by <paramref name="owner"/>.
     /// New files are copied, existing files are overwritten, and files that are no longer
@@ -630,7 +474,7 @@ public class PacmineEnvironment : IDisposable
     /// <param name="source">The source directory containing all files to install.</param>
     /// <returns>A dictionary mapping each relative file path to its SHA256 checksum.</returns>
     /// <remarks>
-    /// This is a pure file system operation and have no effect on registry or index.
+    /// This is a pure file system operation and has no effect on the registry or name list.
     /// The caller should use <see cref="TryWriteRegistry"/> separately to persist the returned
     /// file list as part of a <see cref="PackageRegistry"/>.
     /// </remarks>
@@ -643,11 +487,9 @@ public class PacmineEnvironment : IDisposable
         var sourceFiles = source.EnumerateFiles("*", SearchOption.AllDirectories);
 
         // Track which files were previously owned by this package
-        var mngFiles = _indexManager.GetHandler<ManagedFileListHandler>()?.Content ?? [];
-        var previouslyOwned = mngFiles
-            .Where(kvp => kvp.Value.Owner == owner)
-            .Select(kvp => kvp.Key)
-            .ToHashSet();
+        var previouslyOwned = PackageRegistry.TryGetValue(owner, out var existing)
+            ? existing.FileList.Keys.ToHashSet()
+            : [];
 
         foreach (var sourceFile in sourceFiles)
         {
