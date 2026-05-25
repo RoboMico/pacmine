@@ -109,10 +109,10 @@ public partial class PackageMeta
     /// <summary>
     /// Gets the full version string, including epoch (if non-zero), version, and release number.
     /// </summary>
-    /// <returns>A formatted version string in the form <c>epoch:version-release</c>.</returns>
+    /// <returns>A formatted version string in the form <c>epoch:version#release</c>.</returns>
     public string GetFullVersionString()
     {
-        return $"{((Epoch != 0) ? $"{Epoch}:" : "")}{Version}-{Release}";
+        return $"{((Epoch != 0) ? $"{Epoch}:" : "")}{Version}#{Release}";
     }
 
     /// <summary>

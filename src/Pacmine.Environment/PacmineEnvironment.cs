@@ -311,8 +311,9 @@ public class PacmineEnvironment : IDisposable
             }
 
             // 3. Check missing or unsatisfied dependencies.
-            //    A dependency can be satisfied by either a real installed package
-            //    or a virtual package provided by any installed package.
+            //    A dependency can be satisfied by either a real installed package,
+            //    a virtual package provided by any installed package,
+            //    or another package in the packages parameter.
             foreach (var (depName, depRange) in pkgMeta.Depends)
             {
                 bool satisfied = false;
@@ -330,6 +331,31 @@ public class PacmineEnvironment : IDisposable
                     foreach (var version in virtualVersions.Keys)
                     {
                         if (depRange.Contains(version))
+                        {
+                            satisfied = true;
+                            break;
+                        }
+                    }
+                }
+
+                // Check against other packages in the packages parameter
+                if (!satisfied)
+                {
+                    foreach (var otherPkg in packages)
+                    {
+                        if (ReferenceEquals(otherPkg, pkgMeta))
+                            continue;
+
+                        // Check if the other package's own name matches the dependency
+                        if (otherPkg.Name == depName && depRange.Contains(otherPkg.Version))
+                        {
+                            satisfied = true;
+                            break;
+                        }
+
+                        // Check if the other package provides the dependency as a virtual package
+                        if (otherPkg.Provides.TryGetValue(depName, out var providedVersion)
+                            && depRange.Contains(providedVersion))
                         {
                             satisfied = true;
                             break;

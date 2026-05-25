@@ -45,7 +45,6 @@ recipe.meta = {
     optimalaim = "<2.0.0",
     reeses_sodium_options = "<2.0.2",
     simply_no_shading = "<7.6.2",
-    sodium = "*",
     sodium_blendingregistry = "*",
     sodium_extra = "<0.8.0",
     sspb = "<6.0.0",

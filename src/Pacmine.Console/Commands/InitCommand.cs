@@ -40,7 +40,7 @@ internal static class InitCommand
         bool success = true;
         try
         {
-            PacmineEnvironment.Create(dir);
+            using var _ = PacmineEnvironment.Create(dir);
         }
         catch (Exception e)
         {
