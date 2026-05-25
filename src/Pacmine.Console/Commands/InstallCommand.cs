@@ -244,6 +244,50 @@ internal static class InstallCommand
             }
         }
 
+        // 2e. Pre-check file conflicts for all packages before any installation.
+        //     This ensures the batch is fully validated before mutating the environment,
+        //     preventing partial installations that would leave the environment in an invalid state.
+        ConsoleHelper.WriteInfo("Checking file conflicts...");
+        bool hasFileConflict = false;
+        foreach (var (_, meta, _, fileNames) in installOrder)
+        {
+            // For upgrades, ignore files owned by the same package (self-conflict is expected).
+            env.PackageRegistry.TryGetValue(meta.Name, out var existingReg);
+            var ignoredOwners = existingReg != null ? new[] { meta.Name } : Array.Empty<string>();
+            var conflicts = env.CheckConflictFiles([.. fileNames], ignoredOwners);
+
+            foreach (var (fileName, owner) in conflicts)
+            {
+                if (string.IsNullOrEmpty(owner))
+                {
+                    if (force)
+                    {
+                        ConsoleHelper.WriteWarning(
+                            $"  Orphan file will be overwritten: {fileName} (package {meta.Name})");
+                    }
+                    else
+                    {
+                        ConsoleHelper.WriteError(
+                            $"  File conflict: {fileName} already exists (not managed by any package) — would be owned by {meta.Name}. Use --force to overwrite.");
+                        hasFileConflict = true;
+                    }
+                }
+                else
+                {
+                    ConsoleHelper.WriteError(
+                        $"  File conflict: {fileName} is owned by package {owner} — claimed by incoming package {meta.Name}");
+                    hasFileConflict = true;
+                }
+            }
+        }
+
+        if (hasFileConflict)
+        {
+            ConsoleHelper.WriteError("Installation aborted due to file conflicts.");
+            env.Dispose();
+            System.Environment.Exit(1);
+        }
+
         // ── Confirmation prompt ──────────────────────────────────────
         PrintInstallPlan(installOrder, env);
 
@@ -257,17 +301,21 @@ internal static class InstallCommand
         }
 
         // ═══════════════════════════════════════════════════════════════
-        // Phase 3: Install packages in dependency order
+        // Phase 3: Install packages in dependency order.
+        // All file conflicts have been pre-checked in Phase 2e, so InstallSinglePackage
+        // will only encounter truly unexpected errors (e.g. disk I/O failures).
         // ═══════════════════════════════════════════════════════════════
         foreach (var (archivePath, meta, packagedTime, fileNames) in installOrder)
         {
             try
             {
-                InstallSinglePackage(env, archivePath, meta, packagedTime, fileNames, force);
+                InstallSinglePackage(env, archivePath, meta, packagedTime, fileNames);
             }
             catch (Exception ex)
             {
                 ConsoleHelper.WriteError($"Unexpected error installing {meta.Name}: {ex.Message}");
+                ConsoleHelper.WriteError(
+                    "The environment may be in an inconsistent state. Run 'repair' to fix.");
                 break;
             }
         }
@@ -464,54 +512,21 @@ internal static class InstallCommand
     }
 
     /// <summary>
-    /// Installs a single package into the environment: checks file conflicts,
-    /// extracts the archive to a temp directory, copies files via <see cref="PacmineEnvironment.UpdateFiles"/>,
-    /// and persists the registry record. Acceptance has already been checked once for the whole batch.
+    /// Installs a single package into the environment: extracts the archive to a temp directory,
+    /// copies files via <see cref="PacmineEnvironment.UpdateFiles"/>, and persists the registry record.
+    /// File conflicts must have been pre-checked in Phase 2e before calling this method.
+    /// Any failure throws an exception so the caller can stop the batch.
     /// </summary>
     private static void InstallSinglePackage(
         PacmineEnvironment env,
         string archivePath,
         PackageMeta meta,
         DateTime packagedTime,
-        List<string> fileNames,
-        bool force)
+        List<string> fileNames)
     {
         ConsoleHelper.WriteInfo($"Installing {meta.Name} {meta.GetFullVersionString()}...");
 
-        // 1. Check file conflicts
-        env.PackageRegistry.TryGetValue(meta.Name, out var existing);
-        var ignoredOwners = existing != null ? [meta.Name] : Array.Empty<string>();
-        var conflicts = env.CheckConflictFiles([.. fileNames], ignoredOwners);
-        bool hasFatal = false;
-        foreach (var (fileName, owner) in conflicts)
-        {
-            if (string.IsNullOrEmpty(owner))
-            {
-                if (force)
-                {
-                    ConsoleHelper.WriteWarning($"  Overwriting orphan file: {fileName}");
-                }
-                else
-                {
-                    ConsoleHelper.WriteError(
-                        $"  File conflict: {fileName} already exists (not managed by any package). Use --force to overwrite.");
-                    hasFatal = true;
-                }
-            }
-            else
-            {
-                ConsoleHelper.WriteError($"  File conflict: {fileName} is owned by package {owner}");
-                hasFatal = true;
-            }
-        }
-
-        if (hasFatal)
-        {
-            ConsoleHelper.WriteError($"  Skipping {meta.Name} due to file conflicts.");
-            return;
-        }
-
-        // 3. Extract archive to a temporary directory (excluding the meta file)
+        // 1. Extract archive to a temporary directory (excluding the meta file)
         var tempDir = Path.Combine(Path.GetTempPath(), $"pacmine_install_{Guid.NewGuid():N}");
         Directory.CreateDirectory(tempDir);
         try
@@ -536,7 +551,7 @@ internal static class InstallCommand
             throw;
         }
 
-        // 4. Install files into the environment (copy + compute SHA-256 checksums)
+        // 2. Install files into the environment (copy + compute SHA-256 checksums)
         Dictionary<string, string> fileList;
         try
         {
@@ -544,12 +559,11 @@ internal static class InstallCommand
         }
         catch (Exception ex)
         {
-            ConsoleHelper.WriteError($"  Failed to install files for {meta.Name}: {ex.Message}");
             TryDeleteDirectory(tempDir);
-            return;
+            throw new IOException($"Failed to install files for {meta.Name}: {ex.Message}", ex);
         }
 
-        // 5. Write the package registry record
+        // 3. Write the package registry record
         bool writeSuccess = env.TryWriteRegistry(new PackageRegistry
         {
             Meta = meta,
@@ -559,14 +573,13 @@ internal static class InstallCommand
             InstalledTime = DateTime.UtcNow
         });
 
-        // 6. Clean up the temporary directory
+        // 4. Clean up the temporary directory
         TryDeleteDirectory(tempDir);
 
         if (!writeSuccess)
         {
-            ConsoleHelper.WriteError(
-                $"  Failed to write registry for {meta.Name}. The files have been installed but the registry update failed. Try running 'repair'.");
-            return;
+            throw new IOException(
+                $"Failed to write registry for {meta.Name}. The files have been installed but the registry update failed.");
         }
     }
 
