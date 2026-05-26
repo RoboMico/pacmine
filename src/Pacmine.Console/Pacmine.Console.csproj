@@ -16,6 +16,7 @@
 
   <ItemGroup>
     <PackageReference Include="System.CommandLine" Version="3.0.0-preview.4.26230.115" />
+    <PackageReference Include="Wcwidth" Version="4.0.1" />
   </ItemGroup>
 
 </Project>

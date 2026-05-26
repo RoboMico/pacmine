@@ -44,9 +44,7 @@ internal static class InitCommand
         }
         catch (Exception e)
         {
-            Console.ForegroundColor = ConsoleColor.Red;
-            Console.Error.WriteLine($"Failed to initialize {dir}: {e.Message}");
-            Console.ResetColor();
+            ConsoleHelper.WriteError($"Failed to initialize {dir}: {e.Message}");
             success = false;
         }
         if (!success)
@@ -55,12 +53,8 @@ internal static class InitCommand
         }
         if (!skipOnboard)
         {
-            Console.ForegroundColor = ConsoleColor.Yellow;
-            Console.WriteLine("Onboard Wizard is still under construction! Maybe come back and check later?");
-            Console.ResetColor();
+            ConsoleHelper.WriteWarning("Onboard Wizard is still under construction! Maybe come back and check later?");
         }
-        Console.ForegroundColor = ConsoleColor.Green;
-        Console.WriteLine($"Pacmine environment initialized successfully at {dir}");
-        Console.ResetColor();
+        ConsoleHelper.WriteSuccess($"Pacmine environment initialized successfully at {dir}");
     }
 }

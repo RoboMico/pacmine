@@ -130,32 +130,24 @@ internal static class UninstallCommand
     /// </summary>
     private static void PrintUninstallPlan(List<PackageRegistry> installOrder)
     {
-        // Compute column widths
-        int maxNameLen = "Package".Length;
-        int maxVerLen = "Version".Length;
+        var rows = new List<ConsoleHelper.TableCell[]>();
+
+        // Header row
+        rows.Add([
+            new ConsoleHelper.TableCell($"Package ({installOrder.Count})"),
+            new ConsoleHelper.TableCell("Version")
+        ]);
+
+        // Data rows
         foreach (var reg in installOrder)
         {
-            if (reg.Meta.Name.Length > maxNameLen)
-                maxNameLen = reg.Meta.Name.Length;
-            var ver = reg.Meta.GetFullVersionString();
-            if (ver.Length > maxVerLen)
-                maxVerLen = ver.Length;
+            rows.Add([
+                new ConsoleHelper.TableCell(reg.Meta.Name),
+                new ConsoleHelper.TableCell(reg.Meta.GetFullVersionString())
+            ]);
         }
 
-        Console.WriteLine();
-        Console.Write($"Package ({installOrder.Count})".PadRight(maxNameLen));
-        Console.Write("    ");
-        Console.WriteLine("Version");
-        Console.Write(new string('-', maxNameLen));
-        Console.Write("    ");
-        Console.WriteLine(new string('-', maxVerLen));
-
-        foreach (var reg in installOrder)
-        {
-            Console.Write(reg.Meta.Name.PadRight(maxNameLen));
-            Console.Write("    ");
-            Console.WriteLine(reg.Meta.GetFullVersionString());
-        }
+        ConsoleHelper.PrintTable(2, rows, 3);
         Console.WriteLine();
     }
 }

@@ -202,13 +202,9 @@ internal static class InstallCommand
                     break;
             }
         }
-
-        // Remove refused packages from the batch.
-        packageInfos.RemoveAll(p => refusedNames.Contains(p.Meta.Name));
-
-        if (packageInfos.Count == 0)
+        if (allReasons.Length > 0)
         {
-            ConsoleHelper.WriteError("Nothing to install.");
+            ConsoleHelper.WriteError("Installation aborted.");
             env.Dispose();
             System.Environment.Exit(1);
         }
@@ -280,7 +276,7 @@ internal static class InstallCommand
 
         if (hasFileConflict)
         {
-            ConsoleHelper.WriteError("Installation aborted due to file conflicts.");
+            ConsoleHelper.WriteError("Installation aborted.");
             env.Dispose();
             System.Environment.Exit(1);
         }
@@ -304,7 +300,7 @@ internal static class InstallCommand
         {
             try
             {
-                InstallSinglePackage(env, archivePath, meta, packagedTime, fileNames);
+                InstallSinglePackage(env, archivePath, meta, packagedTime);
             }
             catch (Exception ex)
             {
@@ -325,127 +321,81 @@ internal static class InstallCommand
         List<(string ArchivePath, PackageMeta Meta, DateTime PackagedTime, List<string> FileNames)> installOrder,
         PacmineEnvironment env)
     {
-        // Compute column widths
-        int maxNameLen = "Package".Length;
-        int maxOldLen = "Old Version".Length;
-        int maxNewLen = "New Version".Length;
-        foreach (var (_, meta, _, _) in installOrder)
-        {
-            if (meta.Name.Length > maxNameLen)
-                maxNameLen = meta.Name.Length;
-            env.PackageRegistry.TryGetValue(meta.Name, out var existing);
-            if (existing != null)
-            {
-                var oldVer = existing.Meta.GetFullVersionString();
-                if (oldVer.Length > maxOldLen)
-                    maxOldLen = oldVer.Length;
-            }
-            var newVer = meta.GetFullVersionString();
-            if (newVer.Length > maxNewLen)
-                maxNewLen = newVer.Length;
-        }
+        var rows = new List<ConsoleHelper.TableCell[]>();
 
-        // Print header
-        Console.WriteLine();
-        Console.Write($"Package ({installOrder.Count})".PadRight(maxNameLen));
-        Console.Write("    ");
-        Console.Write("Old Version".PadRight(maxOldLen));
-        Console.Write("    ");
-        Console.WriteLine("New Version");
-        Console.Write(new string('-', maxNameLen));
-        Console.Write("    ");
-        Console.Write(new string('-', maxOldLen));
-        Console.Write("    ");
-        Console.WriteLine(new string('-', maxNewLen));
+        // Header row
+        rows.Add([
+            new ConsoleHelper.TableCell($"Package ({installOrder.Count})"),
+            new ConsoleHelper.TableCell("Old Version"),
+            new ConsoleHelper.TableCell("New Version")
+        ]);
 
-        // Print each row
+        // Data rows
         foreach (var (_, meta, _, _) in installOrder)
         {
             env.PackageRegistry.TryGetValue(meta.Name, out var existing);
-            var newVer = meta.GetFullVersionString();
-            var oldVer = existing?.Meta.GetFullVersionString() ?? "-";
             var isUpgrade = existing != null && meta.IsNewerThan(existing.Meta);
 
-            Console.Write(meta.Name.PadRight(maxNameLen));
+            var oldVer = existing?.Meta.GetFullVersionString() ?? "-";
+            var oldCell = new ConsoleHelper.ColoredTableCell(
+                [new ConsoleHelper.ColoredTableCell.ColoredSegment(oldVer, ConsoleColor.DarkGray)]);
 
-            Console.Write("    ");
-            Console.ForegroundColor = ConsoleColor.DarkGray;
-            Console.Write(oldVer.PadRight(maxOldLen));
-            Console.ResetColor();
-            Console.Write("    ");
+            var newCell = BuildVersionCell(meta, existing?.Meta, isUpgrade);
 
-            if (existing == null)
-            {
-                // New install — no highlighting
-                Console.WriteLine(newVer);
-            }
-            else
-            {
-                // Print new version with highlighting
-                PrintVersionHighlighted(meta, existing.Meta, isUpgrade);
-                Console.WriteLine();
-            }
+            rows.Add([
+                new ConsoleHelper.TableCell(meta.Name),
+                oldCell,
+                newCell
+            ]);
         }
+
+        ConsoleHelper.PrintTable(3, rows, 3);
         Console.WriteLine();
     }
 
     /// <summary>
-    /// Prints the new version string with the differing component highlighted.
-    /// Priority: epoch > version > release. Only one component is highlighted.
-    /// Upgrade → green (<see cref="ConsoleColor.Green"/>), downgrade → dark yellow (<see cref="ConsoleColor.DarkYellow"/>).
-    /// Gray components use <see cref="ConsoleColor.DarkGray"/>.
+    /// Builds a <see cref="ConsoleHelper.TableCell"/> for the new version column,
+    /// highlighting the differing component (epoch > version > release priority).
+    /// Upgrade → green, downgrade → dark yellow, gray components → dark gray.
     /// </summary>
-    private static void PrintVersionHighlighted(PackageMeta newMeta, PackageMeta oldMeta, bool isUpgrade)
+    private static ConsoleHelper.TableCell BuildVersionCell(PackageMeta newMeta, PackageMeta? oldMeta, bool isUpgrade)
     {
+        if (oldMeta == null)
+            return new ConsoleHelper.TableCell(newMeta.GetFullVersionString());
+
         var highlightColor = isUpgrade ? ConsoleColor.Green : ConsoleColor.DarkYellow;
-        var grayColor = ConsoleColor.DarkGray;
+        const ConsoleColor GrayColor = ConsoleColor.DarkGray;
+        const ConsoleColor NormalColor = ConsoleColor.Gray;
+
+        var segments = new List<ConsoleHelper.ColoredTableCell.ColoredSegment>();
 
         if (newMeta.Epoch != oldMeta.Epoch)
         {
-            // Highlight epoch, version normal, release gray
-            Console.ForegroundColor = highlightColor;
-            Console.Write($"{newMeta.Epoch}:");
-            Console.ResetColor();
-            Console.Write($"{newMeta.Version}");
-            Console.ForegroundColor = grayColor;
-            Console.Write($"#{newMeta.Release}");
-            Console.ResetColor();
+            if (newMeta.Epoch != 0)
+                segments.Add(new ConsoleHelper.ColoredTableCell.ColoredSegment($"{newMeta.Epoch}:", highlightColor));
+            segments.Add(new ConsoleHelper.ColoredTableCell.ColoredSegment(newMeta.Version.ToString(), NormalColor));
+            segments.Add(new ConsoleHelper.ColoredTableCell.ColoredSegment($"#{newMeta.Release}", GrayColor));
         }
         else if (newMeta.Version != oldMeta.Version)
         {
-            // Epoch gray (if non-zero), highlight version, release gray
             if (newMeta.Epoch != 0)
-            {
-                Console.ForegroundColor = grayColor;
-                Console.Write($"{newMeta.Epoch}:");
-                Console.ResetColor();
-            }
-            Console.ForegroundColor = highlightColor;
-            Console.Write($"{newMeta.Version}");
-            Console.ResetColor();
-            Console.ForegroundColor = grayColor;
-            Console.Write($"#{newMeta.Release}");
-            Console.ResetColor();
+                segments.Add(new ConsoleHelper.ColoredTableCell.ColoredSegment($"{newMeta.Epoch}:", GrayColor));
+            segments.Add(new ConsoleHelper.ColoredTableCell.ColoredSegment(newMeta.Version.ToString(), highlightColor));
+            segments.Add(new ConsoleHelper.ColoredTableCell.ColoredSegment($"#{newMeta.Release}", GrayColor));
         }
         else if (newMeta.Release != oldMeta.Release)
         {
-            // Epoch gray (if non-zero), version normal, highlight release
             if (newMeta.Epoch != 0)
-            {
-                Console.ForegroundColor = grayColor;
-                Console.Write($"{newMeta.Epoch}:");
-                Console.ResetColor();
-            }
-            Console.Write($"{newMeta.Version}");
-            Console.ForegroundColor = highlightColor;
-            Console.Write($"#{newMeta.Release}");
-            Console.ResetColor();
+                segments.Add(new ConsoleHelper.ColoredTableCell.ColoredSegment($"{newMeta.Epoch}:", GrayColor));
+            segments.Add(new ConsoleHelper.ColoredTableCell.ColoredSegment(newMeta.Version.ToString(), NormalColor));
+            segments.Add(new ConsoleHelper.ColoredTableCell.ColoredSegment($"#{newMeta.Release}", highlightColor));
         }
         else
         {
-            // All components are the same
-            Console.Write(newMeta.GetFullVersionString());
+            return new ConsoleHelper.TableCell(newMeta.GetFullVersionString());
         }
+
+        return new ConsoleHelper.ColoredTableCell(segments);
     }
 
     /// <summary>
@@ -458,8 +408,7 @@ internal static class InstallCommand
         PacmineEnvironment env,
         string archivePath,
         PackageMeta meta,
-        DateTime packagedTime,
-        List<string> fileNames)
+        DateTime packagedTime)
     {
         ConsoleHelper.WriteInfo($"Installing {meta.Name} {meta.GetFullVersionString()}...");
 

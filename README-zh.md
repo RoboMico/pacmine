@@ -22,7 +22,7 @@ Pacmine 作为一个 C# 库，采用模块化设计。你可以只包含你需�
 | Pacmine.PackageCraft   | 用于构建 Pacmine 包的工具。                                                      | Pacmine.Core, [Downloader][downloader], [LuaCSharp][luacsharp]  |
 | Pacmine.Environment    | 用于管理游戏实例中组建包注册表的工具，同时提供在文件系统上安装包的文件操作功能。 | Pacmine.Core                                                    |
 | Pacmine.Database (WIP) | 用于管理本地包数据库的工具。                                                     | Pacmine.Core                                                    |
-| Pacmine.Console        | CLI 应用程序，用于下载、安装、管理和构建 Pacmine 包。                            | 所有 `Pacmine` 前缀库, [System.CommandLine][system.commandline] |
+| Pacmine.Console        | CLI 应用程序，用于下载、安装、管理和构建 Pacmine 包。                            | 所有 `Pacmine` 前缀库, [System.CommandLine][system.commandline]，[Wcwidth][wcwidth] |
 
 所有模块共享相同的版本号。每次新发布都会更新所有模块的版本，即使某个模块自上次发布以来未收到任何更新。
 
