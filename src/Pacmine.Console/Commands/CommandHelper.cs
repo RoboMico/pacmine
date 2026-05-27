@@ -20,6 +20,11 @@ internal static class CommandHelper
     public static PacmineEnvironment AccessEnvironment(string? root)
     {
         root ??= System.Environment.CurrentDirectory;
+        if (!Directory.Exists(Path.Combine(root, PacmineEnvironment.SPECIAL_FOLDER_NAME)))
+        {
+            ConsoleHelper.WriteError($"The directory {root} does not contain a Pacmine environment.");
+            System.Environment.Exit(1);
+        }
         int locker = PacmineEnvironment.GetLockerPid(root);
         if (locker > 0)
         {

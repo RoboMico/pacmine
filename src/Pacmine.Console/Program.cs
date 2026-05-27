@@ -21,7 +21,8 @@ pacmine uninstall <pkgNameList> - Uninstall a package
     Alias: remove
 pacmine list - List all installed packages
     --verbose, -v - Show more info about each package
-    (TODO: need an idea for powerful advanced filtering and sorting functions)
+    --root, -r - Set the root directory (default is shell's pwd)
+    (TODO: filtering and sorting deferred to a follow-up)
 pacmine env - Manage environment packages
 (env packs are to track version info of game files that are not managed by pacmine but required by other packages,
 such as minecraft installation, fabric/forge loader, etc.)

@@ -3,8 +3,6 @@ using Pacmine.Environment;
 
 namespace Pacmine.Console.Commands;
 
-using Console = System.Console;
-
 internal static class InitCommand
 {
     public static Command Create()
