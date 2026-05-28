@@ -154,7 +154,7 @@ internal static class InstallCommand
         }
 
         // Separate batch packages into upgrades (names already in environment) and new installs.
-        var existingMetas = env.PackageRegistry.Values.Select(r => r.Meta).ToArray();
+        var existingMetas = env.Registry.GetAllMetas();
         var existingNameSet = existingMetas.Select(m => m.Name).ToHashSet();
 
         var upgradeInfos = packageInfos
@@ -220,7 +220,7 @@ internal static class InstallCommand
         // ── Warn about reinstalling / downgrading packages ──────────
         foreach (var (_, meta, _, _) in installOrder)
         {
-            env.PackageRegistry.TryGetValue(meta.Name, out var existing);
+            var existing = env.Registry.TryGet(meta.Name);
             if (existing == null)
                 continue;
             if (meta.Version == existing.Meta.Version &&
@@ -242,12 +242,14 @@ internal static class InstallCommand
         //     preventing partial installations that would leave the environment in an invalid state.
         ConsoleHelper.WriteInfo("Checking file conflicts...");
         bool hasFileConflict = false;
+        // Build file-to-owner mapping from the registry once for all conflict checks
+        var managedFiles = BuildManagedFileMap(env.Registry.GetAll());
         foreach (var (_, meta, _, fileNames) in installOrder)
         {
             // For upgrades, ignore files owned by the same package (self-conflict is expected).
-            env.PackageRegistry.TryGetValue(meta.Name, out var existingReg);
+            var existingReg = env.Registry.TryGet(meta.Name);
             var ignoredOwners = existingReg != null ? new[] { meta.Name } : Array.Empty<string>();
-            var conflicts = env.CheckConflictFiles([.. fileNames], ignoredOwners);
+            var conflicts = FileManager.CheckConflictFiles(env.RootPath, [.. fileNames], managedFiles, ignoredOwners);
 
             foreach (var (fileName, owner) in conflicts)
             {
@@ -333,7 +335,7 @@ internal static class InstallCommand
         // Data rows
         foreach (var (_, meta, _, _) in installOrder)
         {
-            env.PackageRegistry.TryGetValue(meta.Name, out var existing);
+            var existing = env.Registry.TryGet(meta.Name);
             var isUpgrade = existing != null && meta.IsNewerThan(existing.Meta);
 
             var oldVer = existing?.Meta.GetFullVersionString() ?? "-";
@@ -441,7 +443,9 @@ internal static class InstallCommand
         Dictionary<string, string> fileList;
         try
         {
-            fileList = env.UpdateFiles(meta.Name, new DirectoryInfo(tempDir));
+            var previouslyOwned = env.Registry.TryGet(meta.Name)
+                ?.FileList.Keys.ToHashSet();
+            fileList = FileManager.UpdateFiles(env.RootPath, new DirectoryInfo(tempDir), previouslyOwned);
         }
         catch (Exception ex)
         {
@@ -450,7 +454,7 @@ internal static class InstallCommand
         }
 
         // 3. Write the package registry record
-        bool writeSuccess = env.TryWriteRegistry(new PackageRegistry
+        bool writeSuccess = env.Registry.Write(new PackageRegistry
         {
             Meta = meta,
             FileList = fileList,
@@ -467,6 +471,23 @@ internal static class InstallCommand
             throw new IOException(
                 $"Failed to write registry for {meta.Name}. The files have been installed but the registry update failed.");
         }
+    }
+
+    /// <summary>
+    /// Builds a file-path-to-owner mapping from all installed package registries for conflict checking.
+    /// </summary>
+    private static Dictionary<string, string> BuildManagedFileMap(
+        IReadOnlyDictionary<string, PackageRegistry> allRegistries)
+    {
+        var mngFiles = new Dictionary<string, string>();
+        foreach (var (pkgName, pkgReg) in allRegistries)
+        {
+            foreach (var filePath in pkgReg.FileList.Keys)
+            {
+                mngFiles[filePath] = pkgName;
+            }
+        }
+        return mngFiles;
     }
 
 }

@@ -47,7 +47,7 @@ internal static class UninstallCommand
         // ═══════════════════════════════════════════════════════════════
         ConsoleHelper.WriteInfo("Validating packages...");
 
-        var notFound = pkgNameList.Where(n => !env.PackageRegistry.ContainsKey(n)).ToArray();
+        var notFound = pkgNameList.Where(n => !env.Registry.Contains(n)).ToArray();
         if (notFound.Length > 0)
         {
             foreach (var name in notFound)
@@ -57,13 +57,13 @@ internal static class UninstallCommand
         }
 
         // Collect metadata for the packages to remove
-        var toRemove = pkgNameList.Select(n => env.PackageRegistry[n]).ToList();
+        var toRemove = pkgNameList.Select(n => env.Registry.TryGet(n)!).ToList();
         var toRemoveNames = pkgNameList.ToHashSet();
 
         // ═══════════════════════════════════════════════════════════════
         // Phase 2: Check that removal won't break remaining packages
         // ═══════════════════════════════════════════════════════════════
-        var existingMetas = env.PackageRegistry.Values.Select(r => r.Meta).ToArray();
+        var existingMetas = env.Registry.GetAllMetas();
         var removeReasons = PackageRelationUtil.CheckRemove(existingMetas, pkgNameList);
 
         if (removeReasons.Length > 0)
@@ -114,10 +114,12 @@ internal static class UninstallCommand
             ConsoleHelper.WriteInfo($"Removing {name} {registry.Meta.GetFullVersionString()}...");
 
             // Remove all files owned by this package from disk
-            env.RemovePackageFiles(name);
+            var reg = env.Registry.TryGet(name);
+            if (reg != null)
+                FileManager.RemoveFiles(env.RootPath, reg.FileList.Keys);
 
             // Remove the registry entry
-            if (!env.TryRemoveRegistry(name))
+            if (!env.Registry.Remove(name))
             {
                 ConsoleHelper.WriteError(
                     $"  Failed to remove registry entry for {name}. The files have been deleted but the registry update failed. Run 'repair' to fix.");

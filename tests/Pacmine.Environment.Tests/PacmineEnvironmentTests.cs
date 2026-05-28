@@ -56,19 +56,19 @@ public class PacmineEnvironmentTests : IDisposable
         Assert.Throws<Exception>(() => { PacmineEnvironment.Access(Path.Combine(_tempDir.Path, "nonexistent")); });
     }
 
-    // ── TryWriteRegistry / PackageRegistry dict ───────────────────────────
+    // ── RegistryStore.Write ──────────────────────────────────────────────
 
     [Fact]
-    public void TryWriteRegistry_WritesToDiskAndMemory()
+    public void RegistryWrite_WritesToDiskAndMemory()
     {
         using var env = PacmineEnvironment.Create(_tempDir.Path);
         var registry = CreateTestRegistry("test-pkg", "1.0.0");
 
-        Assert.True(env.TryWriteRegistry(registry));
+        Assert.True(env.Registry.Write(registry));
 
-        // Verify in-memory dictionary
-        Assert.True(env.PackageRegistry.ContainsKey("test-pkg"));
-        Assert.Equal("1.0.0", env.PackageRegistry["test-pkg"].Meta.Version.RawString);
+        // Verify in-memory
+        Assert.True(env.Registry.Contains("test-pkg"));
+        Assert.Equal("1.0.0", env.Registry.TryGet("test-pkg")!.Meta.Version.RawString);
 
         // Verify on-disk file
         var expectedPath = Path.Combine(
@@ -77,25 +77,25 @@ public class PacmineEnvironmentTests : IDisposable
     }
 
     [Fact]
-    public void TryWriteRegistry_UpdatesExistingEntry()
+    public void RegistryWrite_UpdatesExistingEntry()
     {
         using var env = PacmineEnvironment.Create(_tempDir.Path);
-        env.TryWriteRegistry(CreateTestRegistry("test-pkg", "1.0.0"));
-        env.TryWriteRegistry(CreateTestRegistry("test-pkg", "2.0.0"));
+        env.Registry.Write(CreateTestRegistry("test-pkg", "1.0.0"));
+        env.Registry.Write(CreateTestRegistry("test-pkg", "2.0.0"));
 
-        Assert.Equal("2.0.0", env.PackageRegistry["test-pkg"].Meta.Version.RawString);
+        Assert.Equal("2.0.0", env.Registry.TryGet("test-pkg")!.Meta.Version.RawString);
     }
 
-    // ── TryRemoveRegistry ────────────────────────────────────────────────
+    // ── RegistryStore.Remove ─────────────────────────────────────────────
 
     [Fact]
-    public void TryRemoveRegistry_RemovesFromDiskAndMemory()
+    public void RegistryRemove_RemovesFromDiskAndMemory()
     {
         using var env = PacmineEnvironment.Create(_tempDir.Path);
-        env.TryWriteRegistry(CreateTestRegistry("test-pkg", "1.0.0"));
+        env.Registry.Write(CreateTestRegistry("test-pkg", "1.0.0"));
 
-        Assert.True(env.TryRemoveRegistry("test-pkg"));
-        Assert.False(env.PackageRegistry.ContainsKey("test-pkg"));
+        Assert.True(env.Registry.Remove("test-pkg"));
+        Assert.False(env.Registry.Contains("test-pkg"));
 
         var expectedPath = Path.Combine(
             env.RegistryFolder.FullName, "t", "test-pkg.json");
@@ -103,59 +103,58 @@ public class PacmineEnvironmentTests : IDisposable
     }
 
     [Fact]
-    public void TryRemoveRegistry_NonExistentPackage_ReturnsFalse()
+    public void RegistryRemove_NonExistentPackage_ReturnsFalse()
     {
         using var env = PacmineEnvironment.Create(_tempDir.Path);
-        Assert.False(env.TryRemoveRegistry("nonexistent"));
+        Assert.False(env.Registry.Remove("nonexistent"));
     }
 
-    // ── Scan ──────────────────────────────────────────────────────────────
+    // ── RegistryStore.Scan ───────────────────────────────────────────────
 
     [Fact]
-    public void Scan_LoadsRegistryFromDisk()
+    public void RegistryScan_LoadsRegistryFromDisk()
     {
         using var env = PacmineEnvironment.Create(_tempDir.Path);
-        env.TryWriteRegistry(CreateTestRegistry("pkg-a", "1.0.0"));
-        env.TryWriteRegistry(CreateTestRegistry("pkg-b", "2.0.0"));
+        env.Registry.Write(CreateTestRegistry("pkg-a", "1.0.0"));
+        env.Registry.Write(CreateTestRegistry("pkg-b", "2.0.0"));
 
-        // Clear in-memory and reload
-        env.PackageRegistry.Clear();
-        env.Scan();
+        // Re-scan (simulates reloading from disk)
+        env.Registry.Scan();
 
-        Assert.Equal(2, env.PackageRegistry.Count);
-        Assert.True(env.PackageRegistry.ContainsKey("pkg-a"));
-        Assert.True(env.PackageRegistry.ContainsKey("pkg-b"));
+        Assert.Equal(2, env.Registry.Count);
+        Assert.True(env.Registry.Contains("pkg-a"));
+        Assert.True(env.Registry.Contains("pkg-b"));
     }
 
     [Fact]
-    public void Scan_RewritesPackageList()
+    public void RegistryScan_RewritesPackageList()
     {
         using var env = PacmineEnvironment.Create(_tempDir.Path);
-        env.TryWriteRegistry(CreateTestRegistry("pkg-x", "1.0.0"));
+        env.Registry.Write(CreateTestRegistry("pkg-x", "1.0.0"));
 
-        // Simulate a new env instance scanning
-        env.PackageRegistry.Clear();
-        env.Scan();
+        // Re-scan
+        env.Registry.Scan();
 
-        Assert.Single(env.PackageRegistry);
-        Assert.True(env.PackageRegistry.ContainsKey("pkg-x"));
-        Assert.Equal("1.0.0", env.PackageRegistry["pkg-x"].Meta.Version.RawString);
+        Assert.Equal(1, env.Registry.Count);
+        Assert.True(env.Registry.Contains("pkg-x"));
+        Assert.Equal("1.0.0", env.Registry.TryGet("pkg-x")!.Meta.Version.RawString);
 
         // Verify package_list was rewritten to disk
         var lines = File.ReadAllLines(env.PackageListFile.FullName);
         Assert.Contains("pkg-x", lines);
     }
 
-    // ── CheckConflictFiles ───────────────────────────────────────────────
+    // ── FileManager.CheckConflictFiles ───────────────────────────────────
 
     [Fact]
     public void CheckConflictFiles_FileManagedByOtherPackage_ReturnsConflict()
     {
         using var env = PacmineEnvironment.Create(_tempDir.Path);
-        env.TryWriteRegistry(CreateTestRegistry("existing", "1.0.0",
+        env.Registry.Write(CreateTestRegistry("existing", "1.0.0",
             fileList: new() { { "mods/foo.jar", "abc123" } }));
 
-        var conflicts = env.CheckConflictFiles(["mods/foo.jar"], []);
+        var managedFiles = BuildManagedFileMap(env.Registry.GetAll());
+        var conflicts = FileManager.CheckConflictFiles(env.RootPath, ["mods/foo.jar"], managedFiles, []);
 
         Assert.NotEmpty(conflicts);
         Assert.Equal("existing", conflicts["mods/foo.jar"]);
@@ -165,10 +164,11 @@ public class PacmineEnvironmentTests : IDisposable
     public void CheckConflictFiles_FileManagedByIgnoredPackage_ReturnsNoConflict()
     {
         using var env = PacmineEnvironment.Create(_tempDir.Path);
-        env.TryWriteRegistry(CreateTestRegistry("existing", "1.0.0",
+        env.Registry.Write(CreateTestRegistry("existing", "1.0.0",
             fileList: new() { { "mods/foo.jar", "abc123" } }));
 
-        var conflicts = env.CheckConflictFiles(["mods/foo.jar"], ["existing"]);
+        var managedFiles = BuildManagedFileMap(env.Registry.GetAll());
+        var conflicts = FileManager.CheckConflictFiles(env.RootPath, ["mods/foo.jar"], managedFiles, ["existing"]);
 
         Assert.Empty(conflicts);
     }
@@ -180,7 +180,8 @@ public class PacmineEnvironmentTests : IDisposable
         var orphanPath = Path.Combine(_tempDir.Path, "orphan.txt");
         File.WriteAllText(orphanPath, "I'm an orphan!");
 
-        var conflicts = env.CheckConflictFiles(["orphan.txt"], []);
+        var managedFiles = BuildManagedFileMap(env.Registry.GetAll());
+        var conflicts = FileManager.CheckConflictFiles(env.RootPath, ["orphan.txt"], managedFiles, []);
 
         Assert.NotEmpty(conflicts);
         Assert.Equal(string.Empty, conflicts["orphan.txt"]);
@@ -191,18 +192,19 @@ public class PacmineEnvironmentTests : IDisposable
     {
         using var env = PacmineEnvironment.Create(_tempDir.Path);
 
-        var conflicts = env.CheckConflictFiles(["mods/foo.jar"], []);
+        var managedFiles = BuildManagedFileMap(env.Registry.GetAll());
+        var conflicts = FileManager.CheckConflictFiles(env.RootPath, ["mods/foo.jar"], managedFiles, []);
 
         Assert.Empty(conflicts);
     }
 
-    // ── UpdateFiles ──────────────────────────────────────────────────────
+    // ── FileManager.UpdateFiles ──────────────────────────────────────────
 
     [Fact]
     public void UpdateFiles_CopiesFilesAndReturnsHashList()
     {
         using var env = PacmineEnvironment.Create(_tempDir.Path);
-        env.TryWriteRegistry(CreateTestRegistry("owner-pkg", "1.0.0"));
+        env.Registry.Write(CreateTestRegistry("owner-pkg", "1.0.0"));
 
         // Create a source directory with files
         var srcDir = Path.Combine(_tempDir.Path, "source");
@@ -210,7 +212,7 @@ public class PacmineEnvironmentTests : IDisposable
         Directory.CreateDirectory(modsDir);
         File.WriteAllText(Path.Combine(modsDir, "mod.jar"), "mod content");
 
-        var fileList = env.UpdateFiles("owner-pkg", new DirectoryInfo(srcDir));
+        var fileList = FileManager.UpdateFiles(env.RootPath, new DirectoryInfo(srcDir), []);
 
         Assert.NotEmpty(fileList);
         Assert.True(fileList.ContainsKey(Path.Combine("mods", "mod.jar")));
@@ -223,60 +225,61 @@ public class PacmineEnvironmentTests : IDisposable
         using var env = PacmineEnvironment.Create(_tempDir.Path);
 
         // First: install files
-        env.TryWriteRegistry(CreateTestRegistry("owner-pkg", "1.0.0"));
+        env.Registry.Write(CreateTestRegistry("owner-pkg", "1.0.0"));
         var srcDir1 = Path.Combine(_tempDir.Path, "source1");
         Directory.CreateDirectory(Path.Combine(srcDir1, "mods"));
         File.WriteAllText(Path.Combine(srcDir1, "mods", "old.jar"), "old");
-        env.UpdateFiles("owner-pkg", new DirectoryInfo(srcDir1));
+        FileManager.UpdateFiles(env.RootPath, new DirectoryInfo(srcDir1), []);
 
         Assert.True(File.Exists(Path.Combine(_tempDir.Path, "mods", "old.jar")));
 
         // Write the registry so the old file list is persisted
-        var reg = env.PackageRegistry["owner-pkg"];
+        var reg = env.Registry.TryGet("owner-pkg")!;
         reg.FileList = new() { { Path.Combine("mods", "old.jar"), "dummy" } };
-        env.TryWriteRegistry(reg);
+        env.Registry.Write(reg);
 
         // Second: update with new files only
         var srcDir2 = Path.Combine(_tempDir.Path, "source2");
         Directory.CreateDirectory(Path.Combine(srcDir2, "mods"));
         File.WriteAllText(Path.Combine(srcDir2, "mods", "new.jar"), "new");
-        env.UpdateFiles("owner-pkg", new DirectoryInfo(srcDir2));
+        FileManager.UpdateFiles(env.RootPath, new DirectoryInfo(srcDir2),
+            new HashSet<string> { Path.Combine("mods", "old.jar") });
 
         Assert.False(File.Exists(Path.Combine(_tempDir.Path, "mods", "old.jar")));
         Assert.True(File.Exists(Path.Combine(_tempDir.Path, "mods", "new.jar")));
     }
 
-    // ── RemovePackageFiles ───────────────────────────────────────────────
+    // ── FileManager.RemoveFiles ──────────────────────────────────────────
 
     [Fact]
-    public void RemovePackageFiles_DeletesOwnedFiles()
+    public void RemoveFiles_DeletesOwnedFiles()
     {
         using var env = PacmineEnvironment.Create(_tempDir.Path);
-        env.TryWriteRegistry(CreateTestRegistry("owner-pkg", "1.0.0"));
+        env.Registry.Write(CreateTestRegistry("owner-pkg", "1.0.0"));
 
         // Create a source directory and install files
         var srcDir = Path.Combine(_tempDir.Path, "source");
         Directory.CreateDirectory(Path.Combine(srcDir, "mods"));
         File.WriteAllText(Path.Combine(srcDir, "mods", "mod.jar"), "content");
-        env.UpdateFiles("owner-pkg", new DirectoryInfo(srcDir));
+        FileManager.UpdateFiles(env.RootPath, new DirectoryInfo(srcDir), []);
 
         // Persist the file list in registry
-        var reg = env.PackageRegistry["owner-pkg"];
+        var reg = env.Registry.TryGet("owner-pkg")!;
         reg.FileList = new() { { Path.Combine("mods", "mod.jar"), "dummy" } };
-        env.TryWriteRegistry(reg);
+        env.Registry.Write(reg);
 
         Assert.True(File.Exists(Path.Combine(_tempDir.Path, "mods", "mod.jar")));
 
-        env.RemovePackageFiles("owner-pkg");
+        FileManager.RemoveFiles(env.RootPath, [Path.Combine("mods", "mod.jar")]);
 
         Assert.False(File.Exists(Path.Combine(_tempDir.Path, "mods", "mod.jar")));
     }
 
     [Fact]
-    public void RemovePackageFiles_NonExistentPackage_DoesNotThrow()
+    public void RemoveFiles_NonExistentPackage_DoesNotThrow()
     {
         using var env = PacmineEnvironment.Create(_tempDir.Path);
-        var exception = Record.Exception(() => env.RemovePackageFiles("nonexistent"));
+        var exception = Record.Exception(() => FileManager.RemoveFiles(env.RootPath, []));
         Assert.Null(exception);
     }
 
@@ -299,7 +302,7 @@ public class PacmineEnvironmentTests : IDisposable
     [Fact]
     public void GetLockerPid_NoLock_ReturnsNegative()
     {
-        var pid = PacmineEnvironment.GetLockerPid(_tempDir.Path);
+        var pid = EnvironmentLock.GetLockerPid(_tempDir.Path);
         Assert.Equal(-1, pid);
     }
 
@@ -307,49 +310,47 @@ public class PacmineEnvironmentTests : IDisposable
     public void GetLockerPid_ActiveLock_ReturnsValidPid()
     {
         using var env = PacmineEnvironment.Create(_tempDir.Path);
-        var pid = PacmineEnvironment.GetLockerPid(_tempDir.Path);
+        var pid = EnvironmentLock.GetLockerPid(_tempDir.Path);
         Assert.True(pid > 0);
     }
 
-    // ── PackageRegistry dict access ─────────────────────────────────────
+    // ── RegistryStore state ──────────────────────────────────────────────
 
     [Fact]
-    public void PackageRegistry_InitiallyEmpty()
+    public void Registry_InitiallyEmpty()
     {
         using var env = PacmineEnvironment.Create(_tempDir.Path);
-        Assert.Empty(env.PackageRegistry);
+        Assert.Equal(0, env.Registry.Count);
     }
 
     [Fact]
-    public void PackageRegistry_PopulatedAfterAccess()
+    public void Registry_PopulatedAfterAccess()
     {
         // Write packages, dispose, then Access — packages should be reloaded from disk
         using (var env = PacmineEnvironment.Create(_tempDir.Path))
         {
-            env.TryWriteRegistry(CreateTestRegistry("pkg1", "1.0.0"));
-            env.TryWriteRegistry(CreateTestRegistry("pkg2", "2.0.0"));
+            env.Registry.Write(CreateTestRegistry("pkg1", "1.0.0"));
+            env.Registry.Write(CreateTestRegistry("pkg2", "2.0.0"));
         }
 
         using var env2 = PacmineEnvironment.Access(_tempDir.Path);
-        Assert.Equal(2, env2.PackageRegistry.Count);
-        Assert.True(env2.PackageRegistry.ContainsKey("pkg1"));
-        Assert.True(env2.PackageRegistry.ContainsKey("pkg2"));
-        Assert.Equal("1.0.0", env2.PackageRegistry["pkg1"].Meta.Version.RawString);
-        Assert.Equal("2.0.0", env2.PackageRegistry["pkg2"].Meta.Version.RawString);
+        Assert.Equal(2, env2.Registry.Count);
+        Assert.True(env2.Registry.Contains("pkg1"));
+        Assert.True(env2.Registry.Contains("pkg2"));
+        Assert.Equal("1.0.0", env2.Registry.TryGet("pkg1")!.Meta.Version.RawString);
+        Assert.Equal("2.0.0", env2.Registry.TryGet("pkg2")!.Meta.Version.RawString);
     }
 
     [Fact]
-    public void PackageRegistry_ClearedThenScanned_Repopulates()
+    public void Registry_Scanned_Repopulates()
     {
         using var env = PacmineEnvironment.Create(_tempDir.Path);
-        env.TryWriteRegistry(CreateTestRegistry("pkg-repop", "1.0.0"));
+        env.Registry.Write(CreateTestRegistry("pkg-repop", "1.0.0"));
 
-        env.PackageRegistry.Clear();
-        Assert.Empty(env.PackageRegistry);
-
-        env.Scan();
-        Assert.Single(env.PackageRegistry);
-        Assert.True(env.PackageRegistry.ContainsKey("pkg-repop"));
+        // Re-scan should still find the package
+        env.Registry.Scan();
+        Assert.Equal(1, env.Registry.Count);
+        Assert.True(env.Registry.Contains("pkg-repop"));
     }
 
     // ── Dispose releases lock ─────────────────────────────────────────────
@@ -366,7 +367,7 @@ public class PacmineEnvironmentTests : IDisposable
         Assert.False(File.Exists(lockFile));
     }
 
-    // ── UpdateFiles source dir validation ────────────────────────────────
+    // ── FileManager.UpdateFiles source dir validation ────────────────────
 
     [Fact]
     public void UpdateFiles_MissingSourceDir_ThrowsDirectoryNotFoundException()
@@ -374,7 +375,7 @@ public class PacmineEnvironmentTests : IDisposable
         using var env = PacmineEnvironment.Create(_tempDir.Path);
         Assert.Throws<DirectoryNotFoundException>(() =>
         {
-            env.UpdateFiles("owner", new DirectoryInfo(Path.Combine(_tempDir.Path, "nonexistent")));
+            FileManager.UpdateFiles(env.RootPath, new DirectoryInfo(Path.Combine(_tempDir.Path, "nonexistent")), []);
         });
     }
 
@@ -396,5 +397,19 @@ public class PacmineEnvironmentTests : IDisposable
             InstallReason = InstallReasons.Explicit,
             InstalledTime = DateTime.Now
         };
+    }
+
+    private static Dictionary<string, string> BuildManagedFileMap(
+        IReadOnlyDictionary<string, PackageRegistry> allRegistries)
+    {
+        var mngFiles = new Dictionary<string, string>();
+        foreach (var (pkgName, pkgReg) in allRegistries)
+        {
+            foreach (var filePath in pkgReg.FileList.Keys)
+            {
+                mngFiles[filePath] = pkgName;
+            }
+        }
+        return mngFiles;
     }
 }

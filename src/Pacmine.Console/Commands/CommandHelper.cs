@@ -25,7 +25,7 @@ internal static class CommandHelper
             ConsoleHelper.WriteError($"The directory {root} does not contain a Pacmine environment.");
             System.Environment.Exit(1);
         }
-        int locker = PacmineEnvironment.GetLockerPid(root);
+        int locker = EnvironmentLock.GetLockerPid(root);
         if (locker > 0)
         {
             ConsoleHelper.WriteError($"The directory is locked by process {locker}.");

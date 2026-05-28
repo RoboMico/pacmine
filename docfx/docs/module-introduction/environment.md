@@ -2,6 +2,12 @@
 
 Package registry and filesystem management for Pacmine game instances. This library manages the lifecycle of `.pacmine` environments — the per-instance database that tracks which packages are installed, what files they own, their checksums, and inter-package dependency/conflict relationships.
 
+The module is composed of three focused sub-modules, coordinated by [`PacmineEnvironment`](xref:Pacmine.Environment.PacmineEnvironment):
+
+- **[`EnvironmentLock`](xref:Pacmine.Environment.EnvironmentLock)** — PID-based file locking
+- **[`RegistryStore`](xref:Pacmine.Environment.RegistryStore)** — JSON registry CRUD with atomic writes
+- **[`FileManager`](xref:Pacmine.Environment.FileManager)** — pure static filesystem operations
+
 ## Key Concepts
 
 ### Environment
@@ -13,12 +19,7 @@ An environment maps to a single game instance directory (usually a folder in `.m
 ├─ <game files, mod jars, etc.>
 └─ .pacmine/
    ├─ lock                                  # PID-based concurrency lock
-   ├─ index/                                # Fast-access cached index files
-   │  ├─ package_list.json                  # package name -> version
-   │  ├─ virtual_packages.json              # virtual package name -> versions -> providers
-   │  ├─ depends_on.json                    # dependency name -> dependent packages (reverse dep index)
-   │  ├─ managed_files.json                 # file path -> (owner, SHA-256)
-   │  └─ deny_list.json                     # conflict source -> denied package -> version range
+   ├─ package_list                          # plain-text index: one package name per line
    └─ registry/                             # Package metadata, sharded by first character
       ├─ a/
       ├─ b/
@@ -29,44 +30,39 @@ An environment maps to a single game instance directory (usually a folder in `.m
 
 ### Locking
 
-Environments use PID-based file locking to prevent concurrent modifications. `Create()` and `Access()` acquire the lock; `Dispose()` releases it. Accessing a locked environment throws an `Exception` with the holding process's PID.
+Environments use PID-based file locking to prevent concurrent modifications. [`PacmineEnvironment.Create()`](xref:Pacmine.Environment.PacmineEnvironment.Create*) and [`Access()`](xref:Pacmine.Environment.PacmineEnvironment.Access*) acquire the lock via [`EnvironmentLock`](xref:Pacmine.Environment.EnvironmentLock); [`Dispose()`](xref:Pacmine.Environment.PacmineEnvironment.Dispose) releases it. Accessing a locked environment throws an `IOException` with the holding process's PID.
 
-Use `GetLockerPid(directory)` to check whether a directory is locked without attempting to access it. Returns `-1` if not locked.
+Use [`EnvironmentLock.GetLockerPid(directory)`](xref:Pacmine.Environment.EnvironmentLock.GetLockerPid*) to check whether a directory is locked without attempting to access it. Returns `-1` if not locked.
 
 ### Package Registry
 
-Each installed package gets a JSON registry entry under `registry/{init-character}/{package-name}.json`. The registry stores the package's `PackageMeta` (name, version, dependencies, conflicts, provides, replaces), file list with SHA-256 checksums, `InstallReason` (Explicit, AsDependency, or Environment), and timestamps.
+Each installed package gets a JSON registry entry under `registry/{init-character}/{package-name}.json`. The registry stores the package's [`PackageMeta`](xref:Pacmine.Core.PackageMeta) (name, version, dependencies, conflicts, provides, replaces), file list with SHA-256 checksums, [`InstallReason`](xref:Pacmine.Environment.InstallReasons) (`Explicit`, `AsDependency`, or `Environment`), and timestamps.
 
-### Index Files
+The registry is managed by [`RegistryStore`](xref:Pacmine.Environment.RegistryStore), which provides:
 
-The `index/` directory contains cached, denormalized views of registry data for fast lookups. Five index handlers are registered automatically:
+| Method | Description |
+|--------|-------------|
+| `Write(registry)` | Atomic write (tmp → target rename) with rollback on failure |
+| `Remove(name)` | Deletes the JSON file and updates in-memory state |
+| `TryGet(name)` | Returns the registry entry, or `null` |
+| `GetAll()` | Read-only view of all entries |
+| `GetAllMetas()` | All package metadata as an array |
+| `Contains(name)` | Checks existence |
+| `Scan()` | Rebuilds in-memory state and `package_list` from disk enumeration |
 
-| Index File | Handler | Content |
-|---|---|---|
-| `package_list.json` | `PackageListHandler` | Maps each package name to its installed `VersionIdentifier` |
-| `virtual_packages.json` | `VirtualPackagesHandler` | Maps virtual package names to their versions and provider packages |
-| `depends_on.json` | `DependsOnHandler` | Reverse dependency index — maps each dependency (real or virtual) to the list of packages that depend on it |
-| `managed_files.json` | `ManagedFileListHandler` | Maps each file path to its owning package and SHA-256 checksum |
-| `deny_list.json` | `DenyListHandler` | Maps each package to the packages and version ranges it conflicts with |
+All registry writes use an **atomic write pattern**: new content is serialized to a `.tmp` file, the existing file is backed up to `.old`, the temp file is atomically renamed over the target via `File.Move`, and the backup is deleted. If any step fails, the original file is restored from backup.
 
-Index files are automatically kept in sync with registry writes and removals. If they get out of sync (e.g., due to manual modification or file corruption), call `Repair()` to rebuild them from registry data.
+### File Management
 
-### Index Synchronization Guarantee
+File system operations are handled by the static [`FileManager`](xref:Pacmine.Environment.FileManager) class:
 
-All index writes use an **atomic write pattern** to prevent in-memory/on-disk divergence:
+| Method | Description |
+|--------|-------------|
+| `UpdateFiles(rootPath, source, previouslyOwnedFiles)` | Copies files from source into the environment, computes SHA-256 checksums, prunes stale files |
+| `RemoveFiles(rootPath, filePaths)` | Deletes specified files from disk (best-effort) |
+| `CheckConflictFiles(rootPath, fileNames, managedFiles, ignoredOwners)` | Checks whether files conflict with managed or orphan files |
 
-1. New content is serialized to a temporary `.tmp` file
-2. The temp file is atomically renamed over the target file via `File.Move` (atomic on the same filesystem)
-3. In-memory state is only updated after the disk write succeeds
-
-If a write fails (disk full, permissions, I/O error), the in-memory state remains unchanged and the original index file is intact.
-
-Registry write/remove operations follow an **index-first** ordering:
-
-- `TryWriteRegistry()` updates the index first; the registry JSON file is only written to disk if all index handlers succeed
-- `TryRemoveRegistry()` updates the index first; the registry JSON file is only deleted if all index handlers succeed
-
-This guarantees that if registry data is present on disk, the index is guaranteed to be consistent with it.
+File operations are **independent of registry operations** — the caller sequences them explicitly, allowing retry of one without affecting the other.
 
 ## Usage
 
@@ -85,18 +81,18 @@ using var env = PacmineEnvironment.Access("/path/to/instance");
 ### Check if a directory is locked
 
 ```csharp
-int pid = PacmineEnvironment.GetLockerPid("/path/to/instance");
+int pid = EnvironmentLock.GetLockerPid("/path/to/instance");
 // pid is -1 if not locked, otherwise the process ID holding the lock
 ```
 
 ### Write a registry record (e.g., an environment package with no files)
 
-Registry modification and file operations are handled in separate methods, allowing fine-grained control over the environment management process.
+Registry modification and file operations are handled separately, allowing fine-grained control over the environment management process.
 
-`TryWriteRegistry()` returns `true` only if the index was successfully updated <b>and</b> the registry file was written. Returns `false` if any index handler failed to persist its data (disk full, I/O error, etc.) — in that case, the registry file is left unchanged. It is recommended to run `Repair()` afterwards in this case to avoid any inconsistency between different index handlers.
+[`RegistryStore.Write()`](xref:Pacmine.Environment.RegistryStore.Write*) returns `true` only if the registry entry was successfully persisted to disk. Returns `false` on I/O failure (disk full, permissions, etc.) — in that case, the original file is restored from backup.
 
 ```csharp
-bool success = env.TryWriteRegistry(new PackageRegistry
+bool success = env.Registry.Write(new PackageRegistry
 {
     Meta = new PackageMeta
     {
@@ -119,7 +115,16 @@ if (!success)
 ### Retrieve a registry record
 
 ```csharp
-PackageRegistry? record = env.GetRegistry("sodium");
+PackageRegistry? record = env.Registry.TryGet("sodium");
+
+// Or get all metadata
+PackageMeta[] allMetas = env.Registry.GetAllMetas();
+
+// Or iterate all entries
+foreach (var (name, reg) in env.Registry.GetAll())
+{
+    Console.WriteLine($"{name} {reg.Meta.GetFullVersionString()}");
+}
 ```
 
 ### Install a (real) package
@@ -131,10 +136,13 @@ Keep in mind that registry I/O and file system I/O are separate, so you can retr
 // (use System.IO.Compression.ZipFile.ExtractToDirectory)
 
 // Step 2: install files into the game instance, getting SHA-256 checksums
-var fileList = env.UpdateFiles("sodium", new DirectoryInfo(tempDir));
+var previouslyOwned = env.Registry.TryGet("sodium")
+    ?.FileList.Keys.ToHashSet();
+var fileList = FileManager.UpdateFiles(
+    env.RootPath, new DirectoryInfo(tempDir), previouslyOwned);
 
 // Step 3: write the registry record to persist the file list
-bool success = env.TryWriteRegistry(new PackageRegistry
+bool success = env.Registry.Write(new PackageRegistry
 {
     Meta = meta,
     FileList = fileList,
@@ -149,26 +157,32 @@ Directory.Delete(tempDir, recursive: true);
 
 ### Check package acceptance before installing
 
-Before writing a registry record, check whether the packages to be installed would conflict with already-installed packages or have missing dependencies:
+Before writing a registry record, check whether the packages to be installed would conflict with already-installed packages or have missing dependencies using [`PackageRelationUtil`](xref:Pacmine.Core.PackageRelationUtil):
 
 ```csharp
-UnacceptReason[] reasons = env.CheckAcceptance(packagesToCheck);
-if (reasons.Length > 0)
+var existingMetas = env.Registry.GetAllMetas();
+var newMetas = packagesToCheck.Select(p => p.Meta).ToArray();
+
+// Full check on the combined set
+var reasons = PackageRelationUtil.CheckSet(
+    existingMetas.Concat(newMetas).ToArray());
+
+// Or use incremental checks
+var addReasons = PackageRelationUtil.CheckAdd(existingMetas, newMetas);
+
+foreach (var reason in reasons)
 {
-    foreach (var reason in reasons)
+    switch (reason)
     {
-        switch (reason)
-        {
-            case ConflictUnacceptReason c:
-                // package c.RefusedPackageName conflicts with c.ConflictingPackageName at version range c.ConflictingVersions
-                break;
-            case MissingDependsUnacceptReason m:
-                // package m.RefusedPackageName has unsatisfied dependency m.MissingDependName wanting m.DesiredVersions
-                break;
-            case PackageReplacedUnacceptReason r:
-                // package r.RefusedPackageName replaces r.ReplacedPackageName
-                break;
-        }
+        case ConflictInvalidReason c:
+            // c.TargetPackageName conflicts with c.ConflictingPackageName
+            break;
+        case MissingDependsInvalidReason m:
+            // m.TargetPackageName has unsatisfied dependency m.MissingDependName
+            break;
+        case PackageReplacedInvalidReason r:
+            // r.TargetPackageName replaces r.ReplacedPackageName
+            break;
     }
 }
 ```
@@ -176,27 +190,36 @@ if (reasons.Length > 0)
 ### Check if packages can be uninstalled
 
 ```csharp
-UninstallDenyReason[] reasons = env.CheckCanUninstall(["sodium"]);
-foreach (var reason in reasons)
+var existingMetas = env.Registry.GetAllMetas();
+var removeReasons = PackageRelationUtil.CheckRemove(existingMetas, ["sodium"]);
+
+foreach (var reason in removeReasons)
 {
-    switch (reason)
+    if (reason is MissingDependsInvalidReason m)
     {
-        case NotExistDenyReason:
-            // package does not exist
-            break;
-        case BreakDependDenyReason b:
-            // removing this package would break b.DependedBy which depends on it
-            break;
+        // removing this package would break m.TargetPackageName
+        // which depends on m.MissingDependName
     }
 }
 ```
 
 ### Check for file conflicts
 
+Build a file-to-owner mapping from the registry, then check for conflicts:
+
 ```csharp
+// Build managed file map from registry
+var managedFiles = new Dictionary<string, string>();
+foreach (var (pkgName, pkgReg) in env.Registry.GetAll())
+{
+    foreach (var filePath in pkgReg.FileList.Keys)
+        managedFiles[filePath] = pkgName;
+}
+
 // Check if files would conflict with files managed by other packages
 // Pass an array of package names to ignore (e.g., the current package being updated)
-var conflicts = env.CheckConflictFiles(["mods/sodium.jar"], []);
+var conflicts = FileManager.CheckConflictFiles(
+    env.RootPath, ["mods/sodium.jar"], managedFiles, []);
 
 foreach (var (fileName, owner) in conflicts)
 {
@@ -213,30 +236,32 @@ foreach (var (fileName, owner) in conflicts)
 
 ### Uninstall a package
 
-`TryRemoveRegistry()` returns `true` if the package was successfully removed from both the index and the registry. Returns `false` if the package does not exist, or if any index handler failed to persist (in which case the registry file is left intact).
-
 ```csharp
-// Delete the files owned by the package
-env.RemovePackageFiles("sodium");
+var reg = env.Registry.TryGet("sodium");
+if (reg != null)
+{
+    // Delete the files owned by the package
+    FileManager.RemoveFiles(env.RootPath, reg.FileList.Keys);
 
-// Remove the registry record
-bool success = env.TryRemoveRegistry("sodium");
+    // Remove the registry record
+    bool success = env.Registry.Remove("sodium");
+}
 ```
 
 ### Forget about a package but keep its files
 
 ```csharp
-bool success = env.TryRemoveRegistry("sodium");
+bool success = env.Registry.Remove("sodium");
 ```
 
-Note: `TryRemoveRegistry()` does **not** throw if the package is missing — it returns `false` instead.
+Note: [`RegistryStore.Remove()`](xref:Pacmine.Environment.RegistryStore.Remove*) does **not** throw if the package is missing — it returns `false` instead.
 
-### Repair the environment
+### Rebuild registry from disk
 
-Rebuilds index files from registry records. Returns `true` if repair is successful.
+Rebuilds the in-memory registry state and `package_list` file by enumerating all JSON files in the registry folder:
 
 ```csharp
-bool repaired = env.Repair();
+env.Registry.Scan();
 ```
 
 ### Destroying an environment

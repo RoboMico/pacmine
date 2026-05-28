@@ -39,7 +39,7 @@ internal static class ListCommand
     {
         using var env = CommandHelper.AccessEnvironment(root);
 
-        var packages = env.PackageRegistry.Values
+        var packages = env.Registry.GetAll().Values
             .OrderBy(p => p.Meta.Name, StringComparer.OrdinalIgnoreCase)
             .ToArray();
 

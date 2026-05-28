@@ -96,9 +96,10 @@ internal static class EnvCommand
         };
         var newVersionStr = newMeta.Version.ToString();
 
-        var existingMetas = env.PackageRegistry.Values.Select(r => r.Meta).ToArray();
+        var existingMetas = env.Registry.GetAllMetas();
 
-        if (env.PackageRegistry.TryGetValue(name!, out var existing))
+        var existing = env.Registry.TryGet(name!);
+        if (existing != null)
         {
             // ── UPDATE PATH ───────────────────────────────────────────
             if (existing.InstallReason != InstallReasons.Environment)
@@ -152,7 +153,7 @@ internal static class EnvCommand
                 return;
             }
 
-            var success = env.TryWriteRegistry(new PackageRegistry
+            var success = env.Registry.Write(new PackageRegistry
             {
                 Meta = newMeta,
                 FileList = [],
@@ -198,7 +199,7 @@ internal static class EnvCommand
                 return;
             }
 
-            var success = env.TryWriteRegistry(new PackageRegistry
+            var success = env.Registry.Write(new PackageRegistry
             {
                 Meta = newMeta,
                 FileList = [],
@@ -231,7 +232,8 @@ internal static class EnvCommand
 
         using var env = CommandHelper.AccessEnvironment(root);
 
-        if (!env.PackageRegistry.TryGetValue(name!, out var existing))
+        var existing = env.Registry.TryGet(name!);
+        if (existing == null)
         {
             ConsoleHelper.WriteError($"Package '{name}' is not installed.");
             env.Dispose();
@@ -248,7 +250,7 @@ internal static class EnvCommand
         }
 
         // Check that removal won't break dependencies
-        var existingMetas = env.PackageRegistry.Values.Select(r => r.Meta).ToArray();
+        var existingMetas = env.Registry.GetAllMetas();
         var reasons = PackageRelationUtil.CheckRemove(existingMetas, [name!]);
         if (reasons.Length > 0)
         {
@@ -275,7 +277,7 @@ internal static class EnvCommand
             return;
         }
 
-        var success = env.TryRemoveRegistry(name!);
+        var success = env.Registry.Remove(name!);
         if (!success)
         {
             ConsoleHelper.WriteError(
