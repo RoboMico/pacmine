@@ -243,7 +243,7 @@ internal static class InstallCommand
         ConsoleHelper.WriteInfo("Checking file conflicts...");
         bool hasFileConflict = false;
         // Build file-to-owner mapping from the registry once for all conflict checks
-        var managedFiles = BuildManagedFileMap(env.Registry.GetAll());
+        var managedFiles = env.Registry.GetManagedFileMap();
         foreach (var (_, meta, _, fileNames) in installOrder)
         {
             // For upgrades, ignore files owned by the same package (self-conflict is expected).
@@ -472,22 +472,4 @@ internal static class InstallCommand
                 $"Failed to write registry for {meta.Name}. The files have been installed but the registry update failed.");
         }
     }
-
-    /// <summary>
-    /// Builds a file-path-to-owner mapping from all installed package registries for conflict checking.
-    /// </summary>
-    private static Dictionary<string, string> BuildManagedFileMap(
-        IReadOnlyDictionary<string, PackageRegistry> allRegistries)
-    {
-        var mngFiles = new Dictionary<string, string>();
-        foreach (var (pkgName, pkgReg) in allRegistries)
-        {
-            foreach (var filePath in pkgReg.FileList.Keys)
-            {
-                mngFiles[filePath] = pkgName;
-            }
-        }
-        return mngFiles;
-    }
-
 }

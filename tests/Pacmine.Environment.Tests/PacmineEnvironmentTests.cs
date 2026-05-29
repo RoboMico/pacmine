@@ -153,7 +153,7 @@ public class PacmineEnvironmentTests : IDisposable
         env.Registry.Write(CreateTestRegistry("existing", "1.0.0",
             fileList: new() { { "mods/foo.jar", "abc123" } }));
 
-        var managedFiles = BuildManagedFileMap(env.Registry.GetAll());
+        var managedFiles = env.Registry.GetManagedFileMap();
         var conflicts = FileManager.CheckConflictFiles(env.RootPath, ["mods/foo.jar"], managedFiles, []);
 
         Assert.NotEmpty(conflicts);
@@ -167,7 +167,7 @@ public class PacmineEnvironmentTests : IDisposable
         env.Registry.Write(CreateTestRegistry("existing", "1.0.0",
             fileList: new() { { "mods/foo.jar", "abc123" } }));
 
-        var managedFiles = BuildManagedFileMap(env.Registry.GetAll());
+        var managedFiles = env.Registry.GetManagedFileMap();
         var conflicts = FileManager.CheckConflictFiles(env.RootPath, ["mods/foo.jar"], managedFiles, ["existing"]);
 
         Assert.Empty(conflicts);
@@ -180,7 +180,7 @@ public class PacmineEnvironmentTests : IDisposable
         var orphanPath = Path.Combine(_tempDir.Path, "orphan.txt");
         File.WriteAllText(orphanPath, "I'm an orphan!");
 
-        var managedFiles = BuildManagedFileMap(env.Registry.GetAll());
+        var managedFiles = env.Registry.GetManagedFileMap();
         var conflicts = FileManager.CheckConflictFiles(env.RootPath, ["orphan.txt"], managedFiles, []);
 
         Assert.NotEmpty(conflicts);
@@ -192,7 +192,7 @@ public class PacmineEnvironmentTests : IDisposable
     {
         using var env = PacmineEnvironment.Create(_tempDir.Path);
 
-        var managedFiles = BuildManagedFileMap(env.Registry.GetAll());
+        var managedFiles = env.Registry.GetManagedFileMap();
         var conflicts = FileManager.CheckConflictFiles(env.RootPath, ["mods/foo.jar"], managedFiles, []);
 
         Assert.Empty(conflicts);
@@ -397,19 +397,5 @@ public class PacmineEnvironmentTests : IDisposable
             InstallReason = InstallReasons.Explicit,
             InstalledTime = DateTime.Now
         };
-    }
-
-    private static Dictionary<string, string> BuildManagedFileMap(
-        IReadOnlyDictionary<string, PackageRegistry> allRegistries)
-    {
-        var mngFiles = new Dictionary<string, string>();
-        foreach (var (pkgName, pkgReg) in allRegistries)
-        {
-            foreach (var filePath in pkgReg.FileList.Keys)
-            {
-                mngFiles[filePath] = pkgName;
-            }
-        }
-        return mngFiles;
     }
 }

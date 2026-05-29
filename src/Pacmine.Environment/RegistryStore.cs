@@ -149,6 +149,23 @@ public class RegistryStore
         return true;
     }
 
+    /// <summary>
+    /// Builds a file-path-to-owner mapping from all installed package registries.
+    /// </summary>
+    /// <returns>A dictionary mapping file paths to package names.</returns>
+    public Dictionary<string, string> GetManagedFileMap()
+    {
+        var mngFiles = new Dictionary<string, string>();
+        foreach (var pkgReg in _packages.Values)
+        {
+            foreach (var filePath in pkgReg.FileList.Keys)
+            {
+                mngFiles[filePath] = pkgReg.Meta.Name;
+            }
+        }
+        return mngFiles;
+    }
+
     // ── Maintenance ────────────────────────────────────────────────────────
 
     /// <summary>

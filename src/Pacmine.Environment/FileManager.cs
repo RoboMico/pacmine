@@ -123,13 +123,13 @@ public static class FileManager
         string[] ignoredOwners)
     {
         var conflicts = new Dictionary<string, string>();
-
+        HashSet<string> ignoredOwnersSet = new(ignoredOwners);
         foreach (var fileName in fileNames)
         {
             // Check if the file is managed by a package not in the ignored list
             if (managedFiles.TryGetValue(fileName, out var owner))
             {
-                if (!ignoredOwners.Contains(owner))
+                if (!ignoredOwnersSet.Contains(owner))
                 {
                     conflicts[fileName] = owner;
                 }
